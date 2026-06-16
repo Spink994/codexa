@@ -25,9 +25,9 @@ import type { CodeFormatPreferences } from '@codexa/provider';
 |--------------------------------------------------
 */
 import { RunsService } from './runs.service.js';
-import type { ConnectionProvider } from '../persistence/entities.js';
 import { CurrentUser, ANONYMOUS_USER } from '../auth/current-user.js';
 import type { RunState, ProviderConfig, CreateRunRequest } from './run.types.js';
+import type { ConnectionProvider, RepositorySource } from '../persistence/entities.js';
 import { CONNECTION_REPOSITORY, type ConnectionRepository } from '../persistence/repositories.js';
 
 /**
