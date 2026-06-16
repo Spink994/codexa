@@ -1,6 +1,17 @@
+/**
+|--------------------------------------------------
+| Npm imports
+|--------------------------------------------------
+*/
+import ts from 'typescript';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import ts from 'typescript';
+
+/**
+|--------------------------------------------------
+| Custom imports
+|--------------------------------------------------
+*/
 import { compareTypeScriptStructure } from './behavior-check.js';
 import { formatTypeScriptDeterministically } from './deterministic-formatter.js';
 
@@ -17,7 +28,9 @@ test('fully formats a standalone Zod schema by complete property length', () => 
 
 	assert.equal(result.complete, true);
 	assert.equal(result.changed, true);
-	assert.equal(result.formattedSource, `/**
+	assert.equal(
+		result.formattedSource,
+		`/**
 |--------------------------------------------------
 | Prepare config
 |--------------------------------------------------
@@ -28,7 +41,8 @@ const appConfigSchema = z.object({
 	REDIS_PORT: z.coerce.number().default(6379),
 	OPENAI_MODEL: z.string().default('gpt-4.1-mini'),
 	AI_PROVIDER: z.enum(['openai', 'claude', 'anthropic']).default('openai'),
-});`);
+});`,
+	);
 });
 
 test('keeps equal-length Zod properties stable and is idempotent', () => {
@@ -127,20 +141,23 @@ test('formats the full application config schema by complete entry length', () =
 	const lengths = propertyLengths(result.formattedSource);
 
 	assert.equal(result.complete, true);
-	assert.equal(lengths.every((length, index) => index === 0 || lengths[index - 1]! <= length), true);
+	assert.equal(
+		lengths.every((length, index) => index === 0 || lengths[index - 1]! <= length),
+		true,
+	);
 	assert.deepEqual(compareTypeScriptStructure(source, result.formattedSource), { equivalent: true });
 });
 
 test('preserves CRLF and supports exported and multiple schema declarations', () => {
 	const source = [
 		'export const firstSchema = z.object({',
-		"\tLONG_NAME: z.string(),",
-		"\tA: z.string(),",
+		'\tLONG_NAME: z.string(),',
+		'\tA: z.string(),',
 		'});',
 		'',
 		'const secondSchema = z.object({',
-		"\tCOUNT: z.number(),",
-		"\tID: z.string(),",
+		'\tCOUNT: z.number(),',
+		'\tID: z.string(),',
 		'});',
 	].join('\r\n');
 	const result = formatTypeScriptDeterministically('schemas.ts', source, 'typescript');
@@ -165,7 +182,9 @@ export const appConfigSchema = z.object({
 
 	assert.equal(result.complete, true);
 	assert.equal(result.changed, true);
-	assert.equal(result.formattedSource, `/**
+	assert.equal(
+		result.formattedSource,
+		`/**
 |--------------------------------------------------
 | Npm imports
 |--------------------------------------------------
@@ -189,7 +208,8 @@ import Button from '@/components/Button';
 export const appConfigSchema = z.object({
 	ID: z.string(),
 	LONG_NAME: z.string(),
-});`);
+});`,
+	);
 	assert.deepEqual(compareTypeScriptStructure(source, result.formattedSource), { equivalent: true });
 });
 
@@ -261,7 +281,9 @@ export const load = async () => readFile('input.txt', 'utf8');`;
 	assert.equal(result.complete, false);
 	assert.equal(result.changed, true);
 	assert.deepEqual(result.transforms, ['import-order', 'import-headings']);
-	assert.equal(result.formattedSource, `/**
+	assert.equal(
+		result.formattedSource,
+		`/**
 |--------------------------------------------------
 | Npm imports
 |--------------------------------------------------
@@ -278,7 +300,8 @@ import type { TypeScriptSourceAnalysis } from '@codexa/language-typescript';
 import local from './local';
 import helper from '#/helper';
 
-export const load = async () => readFile('input.txt', 'utf8');`);
+export const load = async () => readFile('input.txt', 'utf8');`,
+	);
 });
 
 test('breaks equal-length import ties alphabetically', () => {
@@ -302,9 +325,25 @@ export const app = express();`;
 	assert.equal(result.formattedSource, source);
 });
 
+/**
+|--------------------------------------------------
+| Property lengths
+|--------------------------------------------------
+*/
 function propertyLengths(source: string): number[] {
+	/**
+	 |--------------------------------------------------
+	 | Prepare config
+	 |--------------------------------------------------
+	 */
 	const file = ts.createSourceFile('config.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 	let object: ts.ObjectLiteralExpression | undefined;
+
+	/**
+	 |--------------------------------------------------
+	 | Process items
+	 |--------------------------------------------------
+	 */
 	const visit = (node: ts.Node) => {
 		if (
 			!object &&
@@ -319,5 +358,11 @@ function propertyLengths(source: string): number[] {
 		ts.forEachChild(node, visit);
 	};
 	visit(file);
+
+	/**
+	 |--------------------------------------------------
+	 | Return result
+	 |--------------------------------------------------
+	 */
 	return (object?.properties ?? []).map((property) => property.getText(file).trim().length + 1);
 }

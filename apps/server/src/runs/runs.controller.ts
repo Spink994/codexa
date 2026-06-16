@@ -17,6 +17,7 @@ import {
 	BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { CodeFormatPreferences } from '@codexa/provider';
 
 /**
 |--------------------------------------------------
@@ -24,9 +25,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 |--------------------------------------------------
 */
 import { RunsService } from './runs.service.js';
+import type { ConnectionProvider } from '../persistence/entities.js';
 import { CurrentUser, ANONYMOUS_USER } from '../auth/current-user.js';
-import type { ConnectionProvider, RepositorySource } from '../persistence/entities.js';
-import type { CodeFormatPreferences } from '@codexa/provider';
 import type { RunState, ProviderConfig, CreateRunRequest } from './run.types.js';
 import { CONNECTION_REPOSITORY, type ConnectionRepository } from '../persistence/repositories.js';
 
@@ -69,10 +69,10 @@ export class RunsController {
 	@Post()
 	createSnippet(@Body() request: CreateRunRequest, @CurrentUser() userId: string) {
 		/**
-		|--------------------------------------------------
-		| Start a snippet run and return its state
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Start a snippet run and return its state
+		 |--------------------------------------------------
+		 */
 		return this.runs.createSnippetRun(request, userId);
 	}
 
@@ -83,29 +83,30 @@ export class RunsController {
 	*/
 	@Post('repo')
 	async createRepo(
-		@Body() body: { provider?: ProviderConfig; repoUrl?: string; token?: string; formatting?: CodeFormatPreferences },
+		@Body()
+		body: { provider?: ProviderConfig; repoUrl?: string; token?: string; formatting?: CodeFormatPreferences },
 		@CurrentUser() userId: string,
 	) {
 		/**
-		|--------------------------------------------------
-		| Validate the repository request
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Validate the repository request
+		 |--------------------------------------------------
+		 */
 		if (!body.provider) throw new BadRequestException('Missing "provider" configuration.');
 		if (!body.repoUrl) throw new BadRequestException('Missing "repoUrl".');
 
 		/**
-		|--------------------------------------------------
-		| Resolve a clone token from the body or a connection
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Resolve a clone token from the body or a connection
+		 |--------------------------------------------------
+		 */
 		const token = body.token ?? (await this.resolveToken(userId, body.repoUrl));
 
 		/**
-		|--------------------------------------------------
-		| Clone and start the run
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Clone and start the run
+		 |--------------------------------------------------
+		 */
 		return this.runs.createRepoRun(body.provider, body.repoUrl, userId, token, body.formatting);
 	}
 
@@ -116,7 +117,8 @@ export class RunsController {
 	*/
 	@Post('from-preview')
 	createFromPreview(
-		@Body() body: {
+		@Body()
+		body: {
 			previewId?: string;
 			selectedPaths?: string[];
 			provider?: ProviderConfig;
@@ -125,19 +127,19 @@ export class RunsController {
 		@CurrentUser() userId: string,
 	) {
 		/**
-		|--------------------------------------------------
-		| Validate the selection request
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Validate the selection request
+		 |--------------------------------------------------
+		 */
 		if (!body.provider) throw new BadRequestException('Missing "provider" configuration.');
 		if (!body.previewId) throw new BadRequestException('Missing "previewId".');
 		if (!body.selectedPaths?.length) throw new BadRequestException('Select at least one file.');
 
 		/**
-		|--------------------------------------------------
-		| Start a run from the selected files
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Start a run from the selected files
+		 |--------------------------------------------------
+		 */
 		return this.runs.createFromPreview(body.previewId, body.selectedPaths, body.provider, userId, body.formatting);
 	}
 
@@ -148,7 +150,8 @@ export class RunsController {
 	*/
 	@Post('rerun')
 	rerun(
-		@Body() body: {
+		@Body()
+		body: {
 			provider?: ProviderConfig;
 			formatting?: CodeFormatPreferences;
 			files?: { path: string; source: string; moduleId?: string }[];
@@ -187,10 +190,10 @@ export class RunsController {
 		@Query('to') to?: string,
 	) {
 		/**
-		|--------------------------------------------------
-		| Return run summaries newest first
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Return run summaries newest first
+		 |--------------------------------------------------
+		 */
 		const parsedPage = this.parsePositiveInteger(page, 1, 'page');
 		const parsedPageSize = Math.min(this.parsePositiveInteger(pageSize, 20, 'pageSize'), 100);
 		const parsedFrom = this.parseTimestamp(from, 'from');
@@ -199,11 +202,11 @@ export class RunsController {
 			throw new BadRequestException('"from" must be earlier than or equal to "to".');
 		}
 		return this.runs.listRuns(userId, {
+			to: parsedTo,
 			page: parsedPage,
+			from: parsedFrom,
 			pageSize: parsedPageSize,
 			search: search?.trim() || undefined,
-			from: parsedFrom,
-			to: parsedTo,
 		});
 	}
 
@@ -215,10 +218,10 @@ export class RunsController {
 	@Post('import')
 	import(@Body() body: { runs?: (RunState & { source?: string })[] }, @CurrentUser() userId: string) {
 		/**
-		|--------------------------------------------------
-		| Require a signed-in user to claim runs
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Require a signed-in user to claim runs
+		 |--------------------------------------------------
+		 */
 		if (userId === ANONYMOUS_USER) throw new BadRequestException('Sign in to import runs.');
 		return this.runs.importRuns(body.runs ?? [], userId);
 	}
@@ -237,30 +240,25 @@ export class RunsController {
 		@CurrentUser() userId: string,
 	) {
 		/**
-		|--------------------------------------------------
-		| Reject uploads missing the archive
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Reject uploads missing the archive
+		 |--------------------------------------------------
+		 */
 		if (!file) throw new BadRequestException('Missing "file" upload.');
 
 		/**
-		|--------------------------------------------------
-		| Parse the provider configuration field
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Parse the provider configuration field
+		 |--------------------------------------------------
+		 */
 		const provider = this.parseProvider(providerJson);
 
 		/**
-		|--------------------------------------------------
-		| Build plan modules from the archive and start
-		|--------------------------------------------------
-		*/
-		return this.runs.createUploadRun(
-			provider,
-			file.buffer,
-			userId,
-			this.parseFormatting(formattingJson),
-		);
+		 |--------------------------------------------------
+		 | Build plan modules from the archive and start
+		 |--------------------------------------------------
+		 */
+		return this.runs.createUploadRun(provider, file.buffer, userId, this.parseFormatting(formattingJson));
 	}
 
 	/**
@@ -271,10 +269,10 @@ export class RunsController {
 	@Get(':id')
 	get(@Param('id') id: string, @CurrentUser() userId: string) {
 		/**
-		|--------------------------------------------------
-		| Return the stored run state
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Return the stored run state
+		 |--------------------------------------------------
+		 */
 		return this.runs.getRun(id, userId);
 	}
 
@@ -286,10 +284,10 @@ export class RunsController {
 	@Sse(':id/events')
 	events(@Param('id') id: string) {
 		/**
-		|--------------------------------------------------
-		| Return the mapped server-sent event stream
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Return the mapped server-sent event stream
+		 |--------------------------------------------------
+		 */
 		return this.runs.streamEvents(id);
 	}
 
@@ -301,10 +299,10 @@ export class RunsController {
 	@Post(':id/pause')
 	pause(@Param('id') id: string, @CurrentUser() userId: string) {
 		/**
-		|--------------------------------------------------
-		| Pause the run and return its state
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Pause the run and return its state
+		 |--------------------------------------------------
+		 */
 		return this.runs.pause(id, userId);
 	}
 
@@ -316,10 +314,10 @@ export class RunsController {
 	@Post(':id/resume')
 	resume(@Param('id') id: string, @CurrentUser() userId: string) {
 		/**
-		|--------------------------------------------------
-		| Resume the run and return its state
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Resume the run and return its state
+		 |--------------------------------------------------
+		 */
 		return this.runs.resume(id, userId);
 	}
 
@@ -331,10 +329,10 @@ export class RunsController {
 	@Post(':id/cancel')
 	cancel(@Param('id') id: string, @CurrentUser() userId: string) {
 		/**
-		|--------------------------------------------------
-		| Cancel the run and return its state
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Cancel the run and return its state
+		 |--------------------------------------------------
+		 */
 		return this.runs.cancel(id, userId);
 	}
 
@@ -350,10 +348,10 @@ export class RunsController {
 		@CurrentUser() userId: string,
 	) {
 		/**
-		|--------------------------------------------------
-		| Create the pull request from the run's changes
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Create the pull request from the run's changes
+		 |--------------------------------------------------
+		 */
 		return this.runs.createPullRequest(id, userId, body ?? {});
 	}
 
@@ -364,10 +362,10 @@ export class RunsController {
 	*/
 	private async resolveToken(userId: string, repoUrl: string): Promise<string | undefined> {
 		/**
-		|--------------------------------------------------
-		| Derive the provider from the repository host
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Derive the provider from the repository host
+		 |--------------------------------------------------
+		 */
 		const provider: ConnectionProvider | undefined = repoUrl.includes('gitlab')
 			? 'gitlab'
 			: repoUrl.includes('github')
@@ -376,10 +374,10 @@ export class RunsController {
 		if (!provider) return undefined;
 
 		/**
-		|--------------------------------------------------
-		| Return the stored access token when present
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Return the stored access token when present
+		 |--------------------------------------------------
+		 */
 		const connection = await this.connections.find(userId, provider);
 		return connection?.accessToken;
 	}
@@ -391,17 +389,17 @@ export class RunsController {
 	*/
 	private parseProvider(providerJson: string): ProviderConfig {
 		/**
-		|--------------------------------------------------
-		| Reject a missing provider field
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Reject a missing provider field
+		 |--------------------------------------------------
+		 */
 		if (!providerJson) throw new BadRequestException('Missing "provider" field.');
 
 		/**
-		|--------------------------------------------------
-		| Parse the provider JSON, rejecting malformed input
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Parse the provider JSON, rejecting malformed input
+		 |--------------------------------------------------
+		 */
 		try {
 			return JSON.parse(providerJson) as ProviderConfig;
 		} catch {
@@ -415,7 +413,18 @@ export class RunsController {
 	|--------------------------------------------------
 	*/
 	private parseFormatting(formattingJson: string | undefined): CodeFormatPreferences | undefined {
+		/**
+		 |--------------------------------------------------
+		 | Guard clause
+		 |--------------------------------------------------
+		 */
 		if (!formattingJson) return undefined;
+
+		/**
+		 |--------------------------------------------------
+		 | Parse the formatting JSON, rejecting malformed input
+		 |--------------------------------------------------
+		 */
 		try {
 			return JSON.parse(formattingJson) as CodeFormatPreferences;
 		} catch {
@@ -423,21 +432,65 @@ export class RunsController {
 		}
 	}
 
+	/**
+	|--------------------------------------------------
+	| Parse a positive integer query parameter
+	|--------------------------------------------------
+	*/
 	private parsePositiveInteger(value: string | undefined, fallback: number, field: string): number {
+		/**
+		 |--------------------------------------------------
+		 | Guard clause
+		 |--------------------------------------------------
+		 */
 		if (value === undefined) return fallback;
+
+		/**
+		 |--------------------------------------------------
+		 | Validate the parsed integer
+		 |--------------------------------------------------
+		 */
 		const parsed = Number(value);
 		if (!Number.isInteger(parsed) || parsed < 1) {
 			throw new BadRequestException(`"${field}" must be a positive integer.`);
 		}
+
+		/**
+		 |--------------------------------------------------
+		 | Return result
+		 |--------------------------------------------------
+		 */
 		return parsed;
 	}
 
+	/**
+	|--------------------------------------------------
+	| Parse a timestamp query parameter
+	|--------------------------------------------------
+	*/
 	private parseTimestamp(value: string | undefined, field: string): number | undefined {
+		/**
+		 |--------------------------------------------------
+		 | Guard clause
+		 |--------------------------------------------------
+		 */
 		if (value === undefined) return undefined;
+
+		/**
+		 |--------------------------------------------------
+		 | Validate the parsed timestamp
+		 |--------------------------------------------------
+		 */
 		const parsed = Number(value);
 		if (!Number.isFinite(parsed) || parsed < 0) {
 			throw new BadRequestException(`"${field}" must be a valid timestamp.`);
 		}
+
+		/**
+		 |--------------------------------------------------
+		 | Return result
+		 |--------------------------------------------------
+		 */
 		return parsed;
 	}
 }

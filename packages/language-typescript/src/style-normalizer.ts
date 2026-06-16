@@ -1,5 +1,16 @@
+/**
+|--------------------------------------------------
+| Npm imports
+|--------------------------------------------------
+*/
 import ts from 'typescript';
 import type { SourceLanguage } from '@codexa/core';
+
+/**
+|--------------------------------------------------
+| Custom imports
+|--------------------------------------------------
+*/
 import { analyzeTypeScriptSource } from './analyzer.js';
 import { normalizeImportOrder } from './import-order.js';
 
@@ -9,14 +20,30 @@ interface StyleNormalizationResult {
 	transforms: string[];
 }
 
+/**
+|--------------------------------------------------
+| Normalize TypeScript style
+|--------------------------------------------------
+*/
 const normalizeTypeScriptStyle = (
 	path: string,
 	source: string,
 	language: SourceLanguage,
 ): StyleNormalizationResult => {
+	/**
+	 |--------------------------------------------------
+	 | Guard clause
+	 |--------------------------------------------------
+	 */
 	if (!analyzeTypeScriptSource(path, source, language).syntaxValid) {
 		return { changed: false, formattedSource: source, transforms: [] };
 	}
+
+	/**
+	 |--------------------------------------------------
+	 | Prepare payload
+	 |--------------------------------------------------
+	 */
 	const importOrder = normalizeImportOrder(path, source, language);
 	const sourceWithImports = importOrder.formattedSource;
 	const file = ts.createSourceFile(
@@ -26,22 +53,50 @@ const normalizeTypeScriptStyle = (
 		true,
 		language === 'typescript' ? ts.ScriptKind.TS : ts.ScriptKind.JS,
 	);
+
+	/**
+	 |--------------------------------------------------
+	 | Process items
+	 |--------------------------------------------------
+	 */
 	const outermost: ts.ObjectLiteralExpression[] = [];
 	const visit = (node: ts.Node, insideObject: boolean): void => {
+		/**
+		 |--------------------------------------------------
+		 | Process data
+		 |--------------------------------------------------
+		 */
 		if (ts.isObjectLiteralExpression(node)) {
 			if (!insideObject) outermost.push(node);
 			ts.forEachChild(node, (child) => visit(child, true));
 			return;
 		}
+
+		/**
+		 |--------------------------------------------------
+		 | Process items
+		 |--------------------------------------------------
+		 */
 		ts.forEachChild(node, (child) => visit(child, insideObject));
 	};
 	visit(file, false);
 
+	/**
+	 |--------------------------------------------------
+	 | Process items
+	 |--------------------------------------------------
+	 */
 	const edits = outermost.flatMap((object) => {
 		const rendered = renderObject(object, file, sourceWithImports);
 		const current = sourceWithImports.slice(object.getStart(file), object.end);
 		return rendered === current ? [] : [{ start: object.getStart(file), end: object.end, text: rendered }];
 	});
+
+	/**
+	 |--------------------------------------------------
+	 | Guard clause
+	 |--------------------------------------------------
+	 */
 	if (edits.length === 0) {
 		return {
 			changed: importOrder.changed,
@@ -50,15 +105,32 @@ const normalizeTypeScriptStyle = (
 		};
 	}
 
+	/**
+	 |--------------------------------------------------
+	 | Process items
+	 |--------------------------------------------------
+	 */
 	const formattedSource = edits
 		.sort((left, right) => right.start - left.start)
 		.reduce(
 			(current, edit) => `${current.slice(0, edit.start)}${edit.text}${current.slice(edit.end)}`,
 			sourceWithImports,
 		);
+
+	/**
+	 |--------------------------------------------------
+	 | Guard clause
+	 |--------------------------------------------------
+	 */
 	if (!analyzeTypeScriptSource(path, formattedSource, language).syntaxValid) {
 		return { changed: false, formattedSource: source, transforms: [] };
 	}
+
+	/**
+	 |--------------------------------------------------
+	 | Return result
+	 |--------------------------------------------------
+	 */
 	return {
 		changed: true,
 		formattedSource,
@@ -69,28 +141,56 @@ const normalizeTypeScriptStyle = (
 	};
 };
 
-const renderObject = (
-	node: ts.ObjectLiteralExpression,
-	file: ts.SourceFile,
-	source: string,
-): string => {
+/**
+|--------------------------------------------------
+| Render object
+|--------------------------------------------------
+*/
+const renderObject = (node: ts.ObjectLiteralExpression, file: ts.SourceFile, source: string): string => {
+	/**
+	 |--------------------------------------------------
+	 | Guard clause
+	 |--------------------------------------------------
+	 */
 	if (!isSortableObject(node, file)) return node.getText(file);
+
+	/**
+	 |--------------------------------------------------
+	 | Prepare payload
+	 |--------------------------------------------------
+	 */
 	const newline = source.includes('\r\n') ? '\r\n' : '\n';
 	const propertyIndent = readIndent(source, node.properties[0]?.getStart(file) ?? node.getStart(file));
 	const closingIndent = readIndent(source, node.end - 1);
+
+	/**
+	 |--------------------------------------------------
+	 | Process items
+	 |--------------------------------------------------
+	 */
 	const entries = node.properties.map((property, index) => {
 		const core = normalizeCoreIndent(renderProperty(property, file, source), propertyIndent);
 		const trivia = source.slice(property.getFullStart(), property.getStart(file)).trim();
 		return {
-			index,
 			core,
+			index,
 			measure: measureEntry(core),
 			text: trivia ? `${normalizeCommentTrivia(trivia)}${newline}${core}` : core,
 		};
 	});
-	const ordered = [...entries].sort(
-		(left, right) => left.measure - right.measure || left.index - right.index,
-	);
+
+	/**
+	 |--------------------------------------------------
+	 | Process items
+	 |--------------------------------------------------
+	 */
+	const ordered = [...entries].sort((left, right) => left.measure - right.measure || left.index - right.index);
+
+	/**
+	 |--------------------------------------------------
+	 | Process items
+	 |--------------------------------------------------
+	 */
 	const body = ordered
 		.map((entry) =>
 			entry.text
@@ -99,23 +199,51 @@ const renderObject = (
 				.join(newline),
 		)
 		.join(`,${newline}`);
+
+	/**
+	 |--------------------------------------------------
+	 | Return result
+	 |--------------------------------------------------
+	 */
 	return `{${newline}${body},${newline}${closingIndent}}`;
 };
 
-const renderProperty = (
-	property: ts.ObjectLiteralElementLike,
-	file: ts.SourceFile,
-	source: string,
-): string => {
+/**
+|--------------------------------------------------
+| Render property
+|--------------------------------------------------
+*/
+const renderProperty = (property: ts.ObjectLiteralElementLike, file: ts.SourceFile, source: string): string => {
+	/**
+	 |--------------------------------------------------
+	 | Process data
+	 |--------------------------------------------------
+	 */
 	if (ts.isPropertyAssignment(property) && ts.isObjectLiteralExpression(property.initializer)) {
 		const prefix = source.slice(property.getStart(file), property.initializer.getStart(file));
 		const suffix = source.slice(property.initializer.end, property.end);
 		return `${prefix}${renderObject(property.initializer, file, source)}${suffix}`.trim();
 	}
+
+	/**
+	 |--------------------------------------------------
+	 | Return result
+	 |--------------------------------------------------
+	 */
 	return property.getText(file).trim();
 };
 
+/**
+|--------------------------------------------------
+| Is sortable object
+|--------------------------------------------------
+*/
 const isSortableObject = (node: ts.ObjectLiteralExpression, file: ts.SourceFile): boolean => {
+	/**
+	 |--------------------------------------------------
+	 | Guard clause
+	 |--------------------------------------------------
+	 */
 	if (
 		node.properties.length < 2 ||
 		file.getLineAndCharacterOfPosition(node.getStart(file)).line ===
@@ -123,6 +251,12 @@ const isSortableObject = (node: ts.ObjectLiteralExpression, file: ts.SourceFile)
 	) {
 		return false;
 	}
+
+	/**
+	 |--------------------------------------------------
+	 | Process items
+	 |--------------------------------------------------
+	 */
 	const keys = new Set<string>();
 	for (const property of node.properties) {
 		if (
@@ -135,32 +269,91 @@ const isSortableObject = (node: ts.ObjectLiteralExpression, file: ts.SourceFile)
 		if (keys.has(key)) return false;
 		keys.add(key);
 	}
+
+	/**
+	 |--------------------------------------------------
+	 | Return result
+	 |--------------------------------------------------
+	 */
 	return true;
 };
 
-const measureEntry = (text: string): number =>
-	text
-		.split(/\r?\n/)
-		.map((line) => line.trimStart())
-		.join('\n').length + 1;
+/**
+|--------------------------------------------------
+| Measure entry
+|--------------------------------------------------
+*/
+const measureEntry = (text: string): number => {
+	/**
+	 |--------------------------------------------------
+	 | Return result
+	 |--------------------------------------------------
+	 */
+	return (
+		text
+			.split(/\r?\n/)
+			.map((line) => line.trimStart())
+			.join('\n').length + 1
+	);
+};
 
-const normalizeCommentTrivia = (text: string): string =>
-	text
+/**
+|--------------------------------------------------
+| Normalize comment trivia
+|--------------------------------------------------
+*/
+const normalizeCommentTrivia = (text: string): string => {
+	/**
+	 |--------------------------------------------------
+	 | Return result
+	 |--------------------------------------------------
+	 */
+	return text
 		.split(/\r?\n/)
 		.map((line) => {
 			const trimmed = line.trimStart();
 			return trimmed.startsWith('|') ? ` ${trimmed}` : trimmed;
 		})
 		.join('\n');
+};
 
-const normalizeCoreIndent = (text: string, propertyIndent: string): string =>
-	text
+/**
+|--------------------------------------------------
+| Normalize core indent
+|--------------------------------------------------
+*/
+const normalizeCoreIndent = (text: string, propertyIndent: string): string => {
+	/**
+	 |--------------------------------------------------
+	 | Return result
+	 |--------------------------------------------------
+	 */
+	return text
 		.split(/\r?\n/)
-		.map((line, index) => (index === 0 || !line.startsWith(propertyIndent) ? line : line.slice(propertyIndent.length)))
+		.map((line, index) =>
+			index === 0 || !line.startsWith(propertyIndent) ? line : line.slice(propertyIndent.length),
+		)
 		.join('\n');
+};
 
+/**
+|--------------------------------------------------
+| Read indent
+|--------------------------------------------------
+*/
 const readIndent = (source: string, offset: number): string => {
+	/**
+	 |--------------------------------------------------
+	 | Prepare payload
+	 |--------------------------------------------------
+	 */
 	const lineStart = source.lastIndexOf('\n', offset - 1) + 1;
+
+	/**
+	 |--------------------------------------------------
+	 | Return result
+	 |--------------------------------------------------
+	 */
 	return source.slice(lineStart, offset).match(/^[\t ]*/)?.[0] ?? '';
 };
 
