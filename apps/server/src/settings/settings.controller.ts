@@ -3,6 +3,7 @@
 | Npm imports
 |--------------------------------------------------
 */
+import type { CodeFormatPreferences } from '@codexa/provider';
 import { Body, Controller, Get, Inject, Put, UnauthorizedException, BadRequestException } from '@nestjs/common';
 
 /**
@@ -10,7 +11,6 @@ import { Body, Controller, Get, Inject, Put, UnauthorizedException, BadRequestEx
 | Custom imports
 |--------------------------------------------------
 */
-import type { CodeFormatPreferences } from '@codexa/provider';
 import type { ProviderConfig } from '../runs/run.types.js';
 import { CurrentUser, ANONYMOUS_USER } from '../auth/current-user.js';
 import { SETTINGS_REPOSITORY, type SettingsRepository } from '../persistence/repositories.js';
@@ -29,6 +29,11 @@ interface UpdateSettingsBody {
 const DEFAULT_SETTINGS = {
 	styleProfile: 'team-default',
 	provider: { id: 'reference' } as ProviderConfig,
+	/**
+	 |--------------------------------------------------
+	 | Nested formatting
+	 |--------------------------------------------------
+	*/
 	formatting: {
 		semi: true,
 		useTabs: true,
@@ -104,12 +109,24 @@ export class SettingsController {
 			userId,
 			updatedAt: Date.now(),
 			provider: body.provider,
-			styleProfile: body.styleProfile.trim(),
 			formatting: body.formatting,
+			styleProfile: body.styleProfile.trim(),
 		});
 	}
 
-	private validateFormatting(formatting: CodeFormatPreferences | undefined): asserts formatting is CodeFormatPreferences {
+	/**
+	|--------------------------------------------------
+	| Validate formatting
+	|--------------------------------------------------
+	*/
+	private validateFormatting(
+		formatting: CodeFormatPreferences | undefined,
+	): asserts formatting is CodeFormatPreferences {
+		/**
+		 |--------------------------------------------------
+		 | Guard clause
+		 |--------------------------------------------------
+		 */
 		if (!formatting) throw new BadRequestException('formatting configuration is required.');
 		if (!Number.isInteger(formatting.tabWidth) || formatting.tabWidth < 1 || formatting.tabWidth > 16) {
 			throw new BadRequestException('tabWidth must be an integer between 1 and 16.');
