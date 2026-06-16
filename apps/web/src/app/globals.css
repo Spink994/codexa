@@ -1,0 +1,248 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+|--------------------------------------------------
+| Dark theme design tokens
+|--------------------------------------------------
+*/
+:root {
+	--bg: #1f1f1f;
+	--bg-2: #181818;
+	--bg-3: #2d2d2d;
+	--fg: #cccccc;
+	--fg-muted: #8b929c;
+	--border: #2b2b2b;
+	--border-faint: #242424;
+	--border-strong: #3c3c3c;
+	--primary: #0078d4;
+	--primary-fg: #ffffff;
+	--accent: #2dd4bf;
+	--accent-deep: #0e9f8e;
+	--link: #4daafc;
+	--progress: #0e70c0;
+	--error: #f14c4c;
+	--error-bg: #3a1d1d;
+	--error-bd: #5a2626;
+	--warning: #cca700;
+	--warning-bg: #312a17;
+	--warning-bd: #4a3f1e;
+	--success: #73c991;
+	--success-bg: #1d2e22;
+	--info: #4daafc;
+	--info-bg: #16304a;
+	--list-hover: #2a2d2e;
+	--list-active: #04395e;
+}
+
+/**
+|--------------------------------------------------
+| Light theme design tokens
+|--------------------------------------------------
+*/
+[data-theme='light'] {
+	--bg: #ffffff;
+	--bg-2: #f6f6f6;
+	--bg-3: #ffffff;
+	--fg: #3b3b3b;
+	--fg-muted: #71747a;
+	--border: #e6e6e6;
+	--border-faint: #efefef;
+	--border-strong: #cecece;
+	--primary: #005fb8;
+	--primary-fg: #ffffff;
+	--accent: #0c8577;
+	--accent-deep: #0a6b5f;
+	--link: #0066bf;
+	--progress: #005fb8;
+	--error: #cd3131;
+	--error-bg: #fdecea;
+	--error-bd: #f3c0bd;
+	--warning: #9a6700;
+	--warning-bg: #fdf3d8;
+	--warning-bd: #ecd9a0;
+	--success: #16825d;
+	--success-bg: #e3f3ea;
+	--info: #0066bf;
+	--info-bg: #e1effb;
+	--list-hover: #f0f0f0;
+	--list-active: #cfe3fb;
+}
+
+/**
+|--------------------------------------------------
+| High-contrast theme design tokens
+|--------------------------------------------------
+*/
+[data-theme='high-contrast'] {
+	--bg: #000000;
+	--bg-2: #0a0a0a;
+	--bg-3: #0c0c0c;
+	--fg: #ffffff;
+	--fg-muted: #d0d0d0;
+	--border: #6fc3df;
+	--border-faint: #3a3a3a;
+	--border-strong: #6fc3df;
+	--primary: #000000;
+	--primary-fg: #ffffff;
+	--accent: #6fc3df;
+	--accent-deep: #4fa9c5;
+	--link: #6fc3df;
+	--progress: #f38518;
+	--error: #f48771;
+	--error-bg: #000000;
+	--error-bd: #f48771;
+	--warning: #fff200;
+	--warning-bg: #000000;
+	--warning-bd: #fff200;
+	--success: #89d185;
+	--success-bg: #000000;
+	--info: #6fc3df;
+	--info-bg: #000000;
+	--list-hover: #1a1a1a;
+	--list-active: #000000;
+}
+
+/**
+|--------------------------------------------------
+| High-contrast outlines for primary buttons
+|--------------------------------------------------
+*/
+[data-theme='high-contrast'] .cx-primary {
+	border: 1px solid #6fc3df;
+}
+
+/**
+|--------------------------------------------------
+| Base document styling
+|--------------------------------------------------
+*/
+html,
+body {
+	height: 100%;
+}
+
+body {
+	background-color: var(--bg);
+	color: var(--fg);
+	font-size: 13px;
+	-webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+}
+
+.cx-control {
+	border: 1px solid var(--border-strong);
+	border-radius: 5px;
+	background: var(--bg-3);
+	padding: 6px 8px;
+	color: var(--fg);
+	outline: none;
+}
+
+.cx-control:focus {
+	border-color: var(--primary);
+}
+
+.cx-filter-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	border: 1px solid var(--border-strong);
+	border-radius: 5px;
+	background: var(--bg-3);
+	padding: 3px 8px;
+	color: var(--fg);
+	font-size: 11.5px;
+}
+
+.cx-link-button {
+	border-radius: 5px;
+	padding: 3px 8px;
+	color: var(--link);
+}
+
+.cx-link-button:hover {
+	background: var(--list-hover);
+}
+
+.cx-fade {
+	animation: cx-fade 0.3s ease;
+}
+
+@keyframes cx-fade {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/**
+|--------------------------------------------------
+| Thin themed scrollbars
+|--------------------------------------------------
+*/
+.cx-scroll::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+.cx-scroll::-webkit-scrollbar-thumb {
+	background-color: var(--border-strong);
+	border-radius: 9999px;
+}
+
+/**
+|--------------------------------------------------
+| Brand logo gradient tile
+|--------------------------------------------------
+*/
+.cx-logo {
+	background: linear-gradient(140deg, var(--accent), var(--accent-deep));
+}
+
+/**
+|--------------------------------------------------
+| Syntax-highlighted source preview (Shiki)
+|--------------------------------------------------
+*/
+.cx-code-body pre.shiki {
+	margin: 0;
+	padding: 0.75rem 0;
+	background: var(--bg) !important;
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.cx-code-body .shiki code {
+	counter-reset: cx-line;
+	display: inline-block;
+	min-width: 100%;
+}
+
+.cx-code-body .shiki .line {
+	display: inline-block;
+	width: 100%;
+	padding: 0 0.875rem;
+}
+
+.cx-code-body .shiki .line::before {
+	counter-increment: cx-line;
+	content: counter(cx-line);
+	display: inline-block;
+	width: 2rem;
+	margin-right: 1rem;
+	text-align: right;
+	color: var(--fg-muted);
+	opacity: 0.55;
+	user-select: none;
+}

@@ -1,0 +1,23 @@
+{
+	"name": "@codexa/cli",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"bin": {
+		"codexa": "dist/index.js"
+	},
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"scripts": {
+		"build": "tsc -b",
+		"clean": "tsc -b --clean",
+		"test": "node --test dist/index.test.js",
+		"typecheck": "tsc -b --pretty false"
+	},
+	"dependencies": {
+		"@codexa/core": "0.1.0",
+		"@codexa/discovery": "0.1.0",
+		"@codexa/language-typescript": "0.1.0",
+		"@codexa/profile-schema": "0.1.0"
+	}
+}

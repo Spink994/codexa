@@ -1,0 +1,43 @@
+{
+	"id": "starter-backend",
+	"name": "Starter Backend",
+	"version": "0.1.0",
+	"schemaVersion": 1,
+	"description": "Neutral behavior-preserving defaults for TypeScript and JavaScript backend projects.",
+	"frameworks": ["generic-node", "nestjs"],
+	"languages": ["javascript", "typescript"],
+
+	"rules": {
+		"imports": {
+			"enabled": true,
+			"sort": "preserve",
+			"sortNamedImports": false,
+			"customPrefixes": ["#/", "~/", "@/"],
+			"groups": ["built-in", "external", "custom", "side-effect"]
+		},
+
+		"objects": {
+			"order": "preserve",
+			"safeOnly": true
+		},
+
+		"comments": {
+			"enabled": true,
+			"style": "jsdoc",
+			"detail": "concise",
+			"requireFunctionComments": false,
+			"requirePropertyComments": false,
+			"requireBlankLineBoundaryComments": false
+		},
+
+		"conditions": {
+			"preferGuardClauses": false,
+			"allowSingleLineGuards": true
+		},
+
+		"validation": {
+			"requireSyntaxValidation": true,
+			"requireSymbolPreservation": true
+		}
+	}
+}

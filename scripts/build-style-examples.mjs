@@ -1,0 +1,212 @@
+#!/usr/bin/env node
+
+/**
+|--------------------------------------------------
+| Npm imports
+|--------------------------------------------------
+*/
+import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+/**
+|--------------------------------------------------
+| Resolve repository paths
+|--------------------------------------------------
+*/
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, '..');
+const examplesDir = resolve(repoRoot, 'docs/examples');
+const outputFile = resolve(repoRoot, 'packages/provider/src/style-examples.generated.ts');
+
+/**
+|--------------------------------------------------
+| Map each source document to a style category
+|--------------------------------------------------
+*/
+const SOURCES = [
+	{ file: 'functions.md', category: 'function' },
+	{ file: 'hooks.md', category: 'hook' },
+	{ file: 'imports.md', category: 'import' },
+	{ file: 'views.md', category: 'view' },
+];
+
+/**
+|--------------------------------------------------
+| Extract the first fenced code block after a heading
+|--------------------------------------------------
+*/
+const extractBlockAfter = (section, heading) => {
+	/**
+	|--------------------------------------------------
+	| Locate the requested heading inside the section
+	|--------------------------------------------------
+	*/
+	const headingIndex = section.indexOf(`### ${heading}`);
+	if (headingIndex < 0) return null;
+
+	/**
+	|--------------------------------------------------
+	| Match the first fenced block following the heading
+	|--------------------------------------------------
+	*/
+	const after = section.slice(headingIndex);
+	const fence = after.match(/```[a-zA-Z]*\n([\s\S]*?)```/);
+	if (!fence) return null;
+
+	/**
+	|--------------------------------------------------
+	| Return the block body without its trailing newline
+	|--------------------------------------------------
+	*/
+	return fence[1].replace(/\n$/, '');
+};
+
+/**
+|--------------------------------------------------
+| Parse every Input/Output example pair from a document
+|--------------------------------------------------
+*/
+const parseExamples = (markdown, category) => {
+	/**
+	|--------------------------------------------------
+	| Split the document into example sections
+	|--------------------------------------------------
+	*/
+	const sections = markdown.split(/\n## /).filter((section) => section.startsWith('Example'));
+
+	/**
+	|--------------------------------------------------
+	| Collect each section that defines both Input and Output
+	|--------------------------------------------------
+	*/
+	const examples = [];
+	sections.forEach((section) => {
+		/**
+		|--------------------------------------------------
+		| Read the example title and both code blocks
+		|--------------------------------------------------
+		*/
+		const title = section.split('\n')[0].replace(/^Example\s*/, '').trim();
+		const input = extractBlockAfter(section, 'Input');
+		const output = extractBlockAfter(section, 'Output');
+
+		/**
+		|--------------------------------------------------
+		| Skip examples that lack a paired transformation
+		|--------------------------------------------------
+		*/
+		if (input === null || output === null) return;
+
+		/**
+		|--------------------------------------------------
+		| Record the validated example pair
+		|--------------------------------------------------
+		*/
+		examples.push({ category, title, input, output });
+	});
+
+	/**
+	|--------------------------------------------------
+	| Return all parsed pairs for the document
+	|--------------------------------------------------
+	*/
+	return examples;
+};
+
+/**
+|--------------------------------------------------
+| Collect example pairs across every source document
+|--------------------------------------------------
+*/
+const collectAll = () => {
+	/**
+	|--------------------------------------------------
+	| Parse each configured source document in order
+	|--------------------------------------------------
+	*/
+	return SOURCES.flatMap(({ file, category }) => {
+		const markdown = readFileSync(resolve(examplesDir, file), 'utf8');
+		return parseExamples(markdown, category);
+	});
+};
+
+/**
+|--------------------------------------------------
+| Render the generated TypeScript module
+|--------------------------------------------------
+*/
+const renderModule = (examples) => {
+	/**
+	|--------------------------------------------------
+	| Serialize the examples as a JSON literal
+	|--------------------------------------------------
+	*/
+	const literal = JSON.stringify(examples, null, '\t');
+
+	/**
+	|--------------------------------------------------
+	| Return the module text with a generated banner
+	|--------------------------------------------------
+	*/
+	return [
+		'/**',
+		'|--------------------------------------------------',
+		'| Generated style examples',
+		'|--------------------------------------------------',
+		'*/',
+		'// AUTO-GENERATED by scripts/build-style-examples.mjs from docs/examples/*.md.',
+		'// Do not edit by hand; edit the source docs and re-run `npm run build:examples`.',
+		'',
+		'/**',
+		'|--------------------------------------------------',
+		'| Custom imports',
+		'|--------------------------------------------------',
+		'*/',
+		"import type { StyleExample } from './style-pack.js';",
+		'',
+		'/**',
+		'|--------------------------------------------------',
+		'| Worked input and output example pairs',
+		'|--------------------------------------------------',
+		'*/',
+		`const STYLE_EXAMPLES: StyleExample[] = ${literal};`,
+		'',
+		'/**',
+		'|--------------------------------------------------',
+		'| Export generated style examples',
+		'|--------------------------------------------------',
+		'*/',
+		'export { STYLE_EXAMPLES };',
+		'',
+	].join('\n');
+};
+
+/**
+|--------------------------------------------------
+| Generate the style examples module
+|--------------------------------------------------
+*/
+const main = () => {
+	/**
+	|--------------------------------------------------
+	| Parse, render, and write the generated module
+	|--------------------------------------------------
+	*/
+	const examples = collectAll();
+	writeFileSync(outputFile, renderModule(examples), 'utf8');
+
+	/**
+	|--------------------------------------------------
+	| Report a per-category summary
+	|--------------------------------------------------
+	*/
+	const byCategory = examples.reduce((counts, example) => {
+		counts[example.category] = (counts[example.category] || 0) + 1;
+		return counts;
+	}, {});
+	console.log(`Wrote ${examples.length} style examples to ${outputFile}`);
+	console.log(JSON.stringify(byCategory, null, 2));
+};
+
+main();

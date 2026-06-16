@@ -1,0 +1,111 @@
+// Codexa server — production Postgres persistence (Prisma).
+//
+// The app ships with in-memory repositories by default; this schema backs the
+// optional Postgres swap. See the README "Persistence (Postgres / Prisma)" section.
+//
+// Timestamps are stored as BigInt epoch millis to match the numeric `createdAt`
+// the app already produces (Date.now()) — not Prisma DateTime — so no conversion
+// is needed when reading/writing through Prisma-backed repositories.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Registered user account.
+model User {
+  id           String @id
+  email        String @unique
+  passwordHash String
+  createdAt    BigInt // epoch millis
+
+  connections Connection[]
+  profiles    Profile[]
+  settings    Settings?
+
+  @@map("users")
+}
+
+model Settings {
+  userId       String @id
+  provider     Json
+  styleProfile String
+  updatedAt    BigInt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("settings")
+}
+
+// Stored source-control connection (one per provider per user).
+model Connection {
+  id          String @id
+  userId      String
+  provider    String // 'github' | 'gitlab'
+  accessToken String
+  createdAt   BigInt // epoch millis
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("connections")
+}
+
+// Saved style-guidance preset. `guidance` is a Partial<SemanticFormatGuidance>.
+model Profile {
+  id        String @id
+  userId    String
+  name      String
+  guidance  Json
+  createdAt BigInt // epoch millis
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("profiles")
+}
+
+// Persisted run record. `userId` is a plain String (NOT a FK) because it may be
+// the literal "anonymous" for unauthenticated runs.
+model Run {
+  id             String  @id
+  userId         String
+  source         String
+  status         String // 'queued' | 'running' | 'paused' | 'completed' | 'cancelled' | 'failed'
+  createdAt      BigInt // epoch millis
+  totalUnits     Int
+  completedUnits Int
+  error          String?
+
+  // Normalized rows for the RunRecord.results array.
+  files RunFile[]
+
+  @@index([userId])
+  @@map("runs")
+}
+
+// One row per UnitResult in a RunRecord.results array.
+model RunFile {
+  id              String   @id @default(uuid())
+  runId           String
+  path            String
+  moduleId        String
+  status          String
+  changed         Boolean
+  originalSource  String
+  formattedSource String
+  warnings        String[] // Postgres text array
+  attempts        Int
+  model           String?
+  error           String?
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("run_files")
+}

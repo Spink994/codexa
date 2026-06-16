@@ -1,0 +1,30 @@
+{
+	"name": "codexa",
+	"version": "0.1.0",
+	"private": true,
+	"description": "AI-assisted backend code formatter.",
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"scripts": {
+		"build:examples": "node scripts/build-style-examples.mjs",
+		"build": "npm run build:examples && tsc -b packages/core packages/profile-schema packages/language-typescript packages/discovery packages/provider packages/orchestrator apps/cli apps/server",
+		"check": "npm run typecheck && npm run test",
+		"clean": "tsc -b packages/core packages/profile-schema packages/language-typescript packages/discovery packages/provider packages/orchestrator apps/cli apps/server --clean",
+		"lint": "npm run lint --workspaces --if-present",
+		"test": "npm run build && npm run test --workspace @codexa/profile-schema && npm run test --workspace @codexa/language-typescript && npm run test --workspace @codexa/discovery && npm run test --workspace @codexa/provider && npm run test --workspace @codexa/orchestrator && npm run test --workspace @codexa/cli && npm run test --workspace @codexa/server",
+		"typecheck": "tsc -b packages/core packages/profile-schema packages/language-typescript packages/discovery packages/provider packages/orchestrator apps/cli apps/server --pretty false",
+		"discover": "node apps/cli/dist/index.js discover",
+		"validate:starter": "node apps/cli/dist/index.js validate-profile profiles/starter-backend/profile.json"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.1",
+		"esbuild": "^0.28.1",
+		"typescript": "^5.9.2"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"packageManager": "npm@10.8.2"
+}

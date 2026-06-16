@@ -1,0 +1,12 @@
+node_modules
+dist
+.next
+.codexa-data
+*.tsbuildinfo
+coverage
+*.log
+*.vsix
+.DS_Store
+.env
+.env.*
+!.env.example
