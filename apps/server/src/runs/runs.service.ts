@@ -5,13 +5,8 @@
 */
 import { randomUUID } from 'node:crypto';
 import { Observable, ReplaySubject } from 'rxjs';
+import type { CodeFormatPreferences, SemanticFormatGuidance } from '@codexa/provider';
 import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-
-/**
-|--------------------------------------------------
-| Custom imports
-|--------------------------------------------------
-*/
 import { buildJobPlan, runFormatting, createPauseGate, type PauseGate } from '@codexa/orchestrator';
 import {
 	compareTypeScriptStructure,
@@ -19,14 +14,20 @@ import {
 	validateTypeScriptStyle,
 	normalizeTypeScriptStyle,
 } from '@codexa/language-typescript';
-import type { CodeFormatPreferences, SemanticFormatGuidance } from '@codexa/provider';
-import { IntakeService } from '../intake/intake.service.js';
-import { PreviewStore } from '../intake/preview.store.js';
-import { ProviderFactory } from '../providers/provider.factory.js';
-import { JOB_RUNNER, type JobRunner } from './job-runner.js';
+
+/**
+|--------------------------------------------------
+| Custom imports
+|--------------------------------------------------
+*/
 import { ANONYMOUS_USER } from '../auth/current-user.js';
+import { PreviewStore } from '../intake/preview.store.js';
 import { GithubService } from '../github/github.service.js';
+import { IntakeService } from '../intake/intake.service.js';
 import type { RunRecord } from '../persistence/entities.js';
+import { JOB_RUNNER, type JobRunner } from './job-runner.js';
+import { ProviderFactory } from '../providers/provider.factory.js';
+import type { RunEvent, RunState, PlanModule, ProviderConfig, CreateRunRequest } from './run.types.js';
 import {
 	RUN_REPOSITORY,
 	type RunRepository,
@@ -34,7 +35,6 @@ import {
 	CONNECTION_REPOSITORY,
 	type ConnectionRepository,
 } from '../persistence/repositories.js';
-import type { RunEvent, RunState, PlanModule, ProviderConfig, CreateRunRequest } from './run.types.js';
 
 /**
 |--------------------------------------------------
@@ -51,14 +51,14 @@ const DEFAULT_GUIDANCE: SemanticFormatGuidance = {
 
 const DEFAULT_FORMATTING: CodeFormatPreferences = {
 	semi: true,
-	useTabs: true,
 	tabWidth: 4,
+	useTabs: true,
 	printWidth: 120,
+	endOfLine: 'lf',
 	singleQuote: true,
 	trailingComma: 'all',
 	bracketSpacing: true,
 	arrowParens: 'always',
-	endOfLine: 'lf',
 };
 
 /**
@@ -149,10 +149,10 @@ export class RunsService {
 	*/
 	createSnippetRun(request: CreateRunRequest, userId: string): RunRecord {
 		/**
-		|--------------------------------------------------
-		| Build plan modules and start the run
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Build plan modules and start the run
+		 |--------------------------------------------------
+		 */
 		const modules = this.intake.fromSnippet(request.intake);
 		return this.createRun({
 			userId,
@@ -176,10 +176,10 @@ export class RunsService {
 		formatting?: CodeFormatPreferences,
 	): RunRecord {
 		/**
-		|--------------------------------------------------
-		| Build plan modules and start the run
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Build plan modules and start the run
+		 |--------------------------------------------------
+		 */
 		const modules = this.intake.fromZip(archive);
 		return this.createRun({ userId, modules, provider: providerConfig, formatting, source: 'upload:zip' });
 	}
@@ -197,10 +197,10 @@ export class RunsService {
 		formatting?: CodeFormatPreferences,
 	): Promise<RunRecord> {
 		/**
-		|--------------------------------------------------
-		| Clone the repository, then start the run
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Clone the repository, then start the run
+		 |--------------------------------------------------
+		 */
 		const modules = await this.intake.fromRepo(url, token);
 		return this.createRun({ userId, modules, provider: providerConfig, formatting, source: `repo:${url}` });
 	}
@@ -218,33 +218,33 @@ export class RunsService {
 		formatting?: CodeFormatPreferences,
 	): RunRecord {
 		/**
-		|--------------------------------------------------
-		| Load the stored preview owned by the user
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Load the stored preview owned by the user
+		 |--------------------------------------------------
+		 */
 		const entry = this.previews.require(previewId, userId);
 		const selected = new Set(selectedPaths);
 
 		/**
-		|--------------------------------------------------
-		| Keep only the selected files, dropping empties
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Keep only the selected files, dropping empties
+		 |--------------------------------------------------
+		 */
 		const modules = entry.modules
 			.map((module) => ({ id: module.id, files: module.files.filter((file) => selected.has(file.path)) }))
 			.filter((module) => module.files.length > 0);
 
 		/**
-		|--------------------------------------------------
-		| Reject an empty selection, then start the run
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Reject an empty selection, then start the run
+		 |--------------------------------------------------
+		 */
 		if (modules.length === 0) throw new NotFoundException('No files selected from the preview.');
 		return this.createRun({
 			userId,
 			modules,
-			provider: providerConfig,
 			formatting,
+			provider: providerConfig,
 			repository: entry.repository,
 			source: `selection:${modules.length} modules`,
 		});
@@ -257,26 +257,26 @@ export class RunsService {
 	*/
 	createRun(input: CreateRunInput): RunRecord {
 		/**
-		|--------------------------------------------------
-		| Build the provider before any async work
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Build the provider before any async work
+		 |--------------------------------------------------
+		 */
 		const provider = this.providers.build(input.provider);
 
 		/**
-		|--------------------------------------------------
-		| Build the plan and seed the run record
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Build the plan and seed the run record
+		 |--------------------------------------------------
+		 */
 		const plan = buildJobPlan(input.modules);
 		const record: RunRecord = {
 			results: [],
 			status: 'queued',
-			completedUnits: 0,
 			id: randomUUID(),
-			createdAt: Date.now(),
+			completedUnits: 0,
 			userId: input.userId,
 			source: input.source,
+			createdAt: Date.now(),
 			repository: input.repository,
 			totalUnits: plan.jobs.length,
 		};
@@ -284,19 +284,19 @@ export class RunsService {
 		void this.persist(record);
 
 		/**
-		|--------------------------------------------------
-		| Register the event stream and announce creation
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Register the event stream and announce creation
+		 |--------------------------------------------------
+		 */
 		const stream = new ReplaySubject<RunEvent>();
 		this.streams.set(record.id, stream);
 		stream.next({ type: 'run.created', runId: record.id, totalUnits: record.totalUnits });
 
 		/**
-		|--------------------------------------------------
-		| Register a pause gate and enqueue execution
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Register a pause gate and enqueue execution
+		 |--------------------------------------------------
+		 */
 		const gate = createPauseGate();
 		this.gates.set(record.id, gate);
 		this.runner.enqueue(record.id, (signal) =>
@@ -315,10 +315,10 @@ export class RunsService {
 		);
 
 		/**
-		|--------------------------------------------------
-		| Return the queued run record
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Return the queued run record
+		 |--------------------------------------------------
+		 */
 		return record;
 	}
 
@@ -336,22 +336,22 @@ export class RunsService {
 		signal: AbortSignal,
 	): Promise<void> {
 		/**
-		|--------------------------------------------------
-		| Mark the run as running and announce the start
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Mark the run as running and announce the start
+		 |--------------------------------------------------
+		 */
 		const stream = this.streams.get(record.id);
 		record.status = 'running';
 		record.startedAt = Date.now();
 		void this.persist(record);
 		stream?.next({ type: 'run.started', runId: record.id });
 
-		/**
-		|--------------------------------------------------
-		| Run the formatting plan with behavior verification
-		|--------------------------------------------------
-		*/
 		try {
+			/**
+			 |--------------------------------------------------
+			 | Run the formatting plan with behavior verification
+			 |--------------------------------------------------
+			 */
 			const result = await runFormatting({
 				signal,
 				guidance,
@@ -359,33 +359,32 @@ export class RunsService {
 				plan: jobs,
 				pause: gate,
 				verifyBehavior: compareTypeScriptStructure,
-				verifyConformance: (unit, formattedSource) =>
-					validateTypeScriptStyle(unit.path, unit.source, formattedSource, unit.language),
-				styleNormalizer: (unit, formattedSource) =>
-					normalizeTypeScriptStyle(unit.path, formattedSource, unit.language),
 				deterministicFormatter: (unit) =>
 					formatTypeScriptDeterministically(unit.path, unit.source, unit.language),
-
+				styleNormalizer: (unit, formattedSource) =>
+					normalizeTypeScriptStyle(unit.path, formattedSource, unit.language),
+				verifyConformance: (unit, formattedSource) =>
+					validateTypeScriptStyle(unit.path, unit.source, formattedSource, unit.language),
 				/**
-				|--------------------------------------------------
-				| Record and stream each completed unit
-				|--------------------------------------------------
+				 |--------------------------------------------------
+				 | Record and stream each completed unit
+				 |--------------------------------------------------
 				*/
 				onResult: (unit) => {
 					/**
-					|--------------------------------------------------
-					| Update the run record with the new result
-					|--------------------------------------------------
-					*/
+					 |--------------------------------------------------
+					 | Update the run record with the new result
+					 |--------------------------------------------------
+					 */
 					record.results.push(unit);
 					record.completedUnits = record.results.length;
 					void this.persist(record);
-
+				
 					/**
-					|--------------------------------------------------
-					| Stream the completed unit to subscribers
-					|--------------------------------------------------
-					*/
+					 |--------------------------------------------------
+					 | Stream the completed unit to subscribers
+					 |--------------------------------------------------
+					 */
 					stream?.next({
 						runId: record.id,
 						type: 'unit.completed',
@@ -397,24 +396,24 @@ export class RunsService {
 			});
 
 			/**
-			|--------------------------------------------------
-			| Finalize as cancelled or completed
-			|--------------------------------------------------
-			*/
+			 |--------------------------------------------------
+			 | Finalize as cancelled or completed
+			 |--------------------------------------------------
+			 */
 			await this.finalize(record, result.cancelled);
 		} catch (error) {
 			/**
-			|--------------------------------------------------
-			| Finalize as failed when execution throws
-			|--------------------------------------------------
-			*/
+			 |--------------------------------------------------
+			 | Finalize as failed when execution throws
+			 |--------------------------------------------------
+			 */
 			await this.fail(record, error instanceof Error ? error.message : String(error));
 		} finally {
 			/**
-			|--------------------------------------------------
-			| Release in-flight run resources
-			|--------------------------------------------------
-			*/
+			 |--------------------------------------------------
+			 | Release in-flight run resources
+			 |--------------------------------------------------
+			 */
 			this.gates.delete(record.id);
 			this.active.delete(record.id);
 		}
@@ -427,20 +426,20 @@ export class RunsService {
 	*/
 	private async finalize(record: RunRecord, cancelled: boolean): Promise<void> {
 		/**
-		|--------------------------------------------------
-		| Update terminal status and persist
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Update terminal status and persist
+		 |--------------------------------------------------
+		 */
 		record.status = cancelled ? 'cancelled' : 'completed';
 		record.completedAt = Date.now();
 		record.durationMs = record.completedAt - (record.startedAt ?? record.createdAt);
 		await this.persist(record);
 
 		/**
-		|--------------------------------------------------
-		| Stream the terminal event and close the stream
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Stream the terminal event and close the stream
+		 |--------------------------------------------------
+		 */
 		const stream = this.streams.get(record.id);
 		stream?.next(
 			cancelled
@@ -457,10 +456,10 @@ export class RunsService {
 	*/
 	private async fail(record: RunRecord, message: string): Promise<void> {
 		/**
-		|--------------------------------------------------
-		| Record the failure and persist
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Record the failure and persist
+		 |--------------------------------------------------
+		 */
 		record.status = 'failed';
 		record.error = message;
 		record.completedAt = Date.now();
@@ -468,10 +467,10 @@ export class RunsService {
 		await this.persist(record);
 
 		/**
-		|--------------------------------------------------
-		| Stream the failure event and close the stream
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Stream the failure event and close the stream
+		 |--------------------------------------------------
+		 */
 		const stream = this.streams.get(record.id);
 		stream?.next({ type: 'run.failed', runId: record.id, error: message });
 		stream?.complete();
@@ -488,10 +487,10 @@ export class RunsService {
 	*/
 	private persist(record: RunRecord): Promise<void> {
 		/**
-		|--------------------------------------------------
-		| Skip durable writes for anonymous runs
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Skip durable writes for anonymous runs
+		 |--------------------------------------------------
+		 */
 		if (record.userId === ANONYMOUS_USER) return Promise.resolve();
 		return this.repo.save(record);
 	}
@@ -503,10 +502,10 @@ export class RunsService {
 	*/
 	async getRun(id: string, userId: string): Promise<RunRecord> {
 		/**
-		|--------------------------------------------------
-		| Resolve from live runs first, then durable storage
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Resolve from live runs first, then durable storage
+		 |--------------------------------------------------
+		 */
 		const record = this.active.get(id) ?? (await this.repo.find(id));
 		if (!record || record.userId !== userId) throw new NotFoundException(`Run "${id}" was not found.`);
 		return record;
@@ -523,48 +522,49 @@ export class RunsService {
 		options: { title?: string; body?: string; branch?: string } = {},
 	): Promise<{ url: string; number: number; viaFork: boolean }> {
 		/**
-		|--------------------------------------------------
-		| Require an owned, completed run with a repository
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Require an owned, completed run with a repository
+		 |--------------------------------------------------
+		 */
 		const record = await this.getRun(id, userId);
 		if (userId === ANONYMOUS_USER) throw new BadRequestException('Sign in to open a pull request.');
-		if (record.status !== 'completed') throw new BadRequestException('The run must finish before opening a pull request.');
+		if (record.status !== 'completed')
+			throw new BadRequestException('The run must finish before opening a pull request.');
 		if (!record.repository || record.repository.provider !== 'github') {
 			throw new BadRequestException('This run was not created from a GitHub repository.');
 		}
 
 		/**
-		|--------------------------------------------------
-		| Collect the changed files produced by the run
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Collect the changed files produced by the run
+		 |--------------------------------------------------
+		 */
 		const files = record.results
 			.filter((result) => result.changed && result.status === 'formatted')
 			.map((result) => ({ path: result.path.replace(/^\/+/, ''), content: result.formattedSource }));
 		if (files.length === 0) throw new BadRequestException('No formatted changes to propose.');
 
 		/**
-		|--------------------------------------------------
-		| Require a stored GitHub token to push the branch
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Require a stored GitHub token to push the branch
+		 |--------------------------------------------------
+		 */
 		const connection = await this.connections.find(userId, 'github');
 		if (!connection) throw new BadRequestException('Connect a GitHub account before opening a pull request.');
 
 		/**
-		|--------------------------------------------------
-		| Open the pull request on the run's repository
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Open the pull request on the run's repository
+		 |--------------------------------------------------
+		 */
 		const { repository } = record;
 		const branch = options.branch?.trim() || `codexa/format-${record.id.slice(0, 8)}`;
 		const pull = await this.github.openPullRequest(
 			connection.accessToken,
 			{
-				owner: repository.owner,
-				repo: repository.repo,
 				branch,
+				repo: repository.repo,
+				owner: repository.owner,
 				baseBranch: repository.baseBranch,
 				title: options.title?.trim() || `Codexa: format ${files.length} file${files.length === 1 ? '' : 's'}`,
 				body:
@@ -575,10 +575,10 @@ export class RunsService {
 		);
 
 		/**
-		|--------------------------------------------------
-		| Persist the pull request URL on the run
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Persist the pull request URL on the run
+		 |--------------------------------------------------
+		 */
 		record.pullRequestUrl = pull.url;
 		await this.persist(record);
 		return { url: pull.url, number: pull.number, viaFork: pull.viaFork };
@@ -591,10 +591,10 @@ export class RunsService {
 	*/
 	async listRuns(userId: string, query: RunHistoryQuery): Promise<RunHistoryResult> {
 		/**
-		|--------------------------------------------------
-		| Map persisted runs to lightweight summaries
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Map persisted runs to lightweight summaries
+		 |--------------------------------------------------
+		 */
 		const result = await this.repo.listByUser(userId, query);
 		const items = result.items.map((record) => ({
 			id: record.id,
@@ -602,14 +602,14 @@ export class RunsService {
 			status: record.status,
 			createdAt: record.createdAt,
 			totalUnits: record.totalUnits,
-			completedUnits: record.completedUnits,
 			durationMs: record.durationMs,
+			completedUnits: record.completedUnits,
 		}));
 		return {
 			items,
 			page: query.page,
-			pageSize: query.pageSize,
 			total: result.total,
+			pageSize: query.pageSize,
 			totalPages: Math.max(1, Math.ceil(result.total / query.pageSize)),
 		};
 	}
@@ -621,26 +621,26 @@ export class RunsService {
 	*/
 	async importRuns(runs: (RunState & { source?: string })[], userId: string): Promise<{ imported: number }> {
 		/**
-		|--------------------------------------------------
-		| Upsert each run under the user, idempotent by id
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Upsert each run under the user, idempotent by id
+		 |--------------------------------------------------
+		 */
 		let imported = 0;
 		for (const run of runs) {
 			/**
-			|--------------------------------------------------
-			| Skip malformed runs and runs owned by others
-			|--------------------------------------------------
-			*/
+			 |--------------------------------------------------
+			 | Skip malformed runs and runs owned by others
+			 |--------------------------------------------------
+			 */
 			if (!run || typeof run.id !== 'string') continue;
 			const existing = await this.repo.find(run.id);
 			if (existing && existing.userId !== userId) continue;
 
 			/**
-			|--------------------------------------------------
-			| Persist the run under the signed-in user
-			|--------------------------------------------------
-			*/
+			 |--------------------------------------------------
+			 | Persist the run under the signed-in user
+			 |--------------------------------------------------
+			 */
 			await this.repo.save({ ...run, userId, source: run.source ?? 'imported' });
 			imported += 1;
 		}
@@ -654,10 +654,10 @@ export class RunsService {
 	*/
 	async pause(id: string, userId: string): Promise<RunRecord> {
 		/**
-		|--------------------------------------------------
-		| Pause the gate and persist the paused status
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Pause the gate and persist the paused status
+		 |--------------------------------------------------
+		 */
 		const record = await this.requireActive(id, userId);
 		this.gates.get(id)?.pause();
 		if (record.status === 'running') record.status = 'paused';
@@ -672,10 +672,10 @@ export class RunsService {
 	*/
 	async resume(id: string, userId: string): Promise<RunRecord> {
 		/**
-		|--------------------------------------------------
-		| Resume the gate and persist the running status
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Resume the gate and persist the running status
+		 |--------------------------------------------------
+		 */
 		const record = await this.requireActive(id, userId);
 		this.gates.get(id)?.resume();
 		if (record.status === 'paused') record.status = 'running';
@@ -690,10 +690,10 @@ export class RunsService {
 	*/
 	async cancel(id: string, userId: string): Promise<RunRecord> {
 		/**
-		|--------------------------------------------------
-		| Resume any pause and abort the job
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Resume any pause and abort the job
+		 |--------------------------------------------------
+		 */
 		const record = await this.requireActive(id, userId);
 		this.gates.get(id)?.resume();
 		this.runner.cancel(id);
@@ -707,34 +707,34 @@ export class RunsService {
 	*/
 	streamEvents(id: string): Observable<{ data: string }> {
 		/**
-		|--------------------------------------------------
-		| Resolve the run stream or an empty replay
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Resolve the run stream or an empty replay
+		 |--------------------------------------------------
+		 */
 		const stream = this.streams.get(id) ?? new ReplaySubject<RunEvent>();
 
 		/**
-		|--------------------------------------------------
-		| Map run events into server-sent message frames
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Map run events into server-sent message frames
+		 |--------------------------------------------------
+		 */
 		return new Observable((subscriber) => {
 			/**
-			|--------------------------------------------------
-			| Forward each event as an SSE frame
-			|--------------------------------------------------
-			*/
+			 |--------------------------------------------------
+			 | Forward each event as an SSE frame
+			 |--------------------------------------------------
+			 */
 			const subscription = stream.subscribe({
-				next: (event) => subscriber.next({ data: JSON.stringify(event) }),
-				error: (error) => subscriber.error(error),
 				complete: () => subscriber.complete(),
+				error: (error) => subscriber.error(error),
+				next: (event) => subscriber.next({ data: JSON.stringify(event) }),
 			});
 
 			/**
-			|--------------------------------------------------
-			| Tear down the subscription on unsubscribe
-			|--------------------------------------------------
-			*/
+			 |--------------------------------------------------
+			 | Tear down the subscription on unsubscribe
+			 |--------------------------------------------------
+			 */
 			return () => subscription.unsubscribe();
 		});
 	}
@@ -746,10 +746,10 @@ export class RunsService {
 	*/
 	private async requireActive(id: string, userId: string): Promise<RunRecord> {
 		/**
-		|--------------------------------------------------
-		| Enforce ownership before returning the live record
-		|--------------------------------------------------
-		*/
+		 |--------------------------------------------------
+		 | Enforce ownership before returning the live record
+		 |--------------------------------------------------
+		 */
 		await this.getRun(id, userId);
 		const record = this.active.get(id);
 		if (!record) throw new NotFoundException(`Run "${id}" is not active.`);

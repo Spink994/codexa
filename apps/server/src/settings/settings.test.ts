@@ -14,16 +14,21 @@ import assert from 'node:assert/strict';
 import { SettingsController } from './settings.controller.js';
 import { InMemorySettingsRepository } from '../persistence/in-memory.js';
 
+/**
+|--------------------------------------------------
+| Prepare config
+|--------------------------------------------------
+*/
 const formatting = {
 	semi: true,
-	useTabs: false,
 	tabWidth: 2,
+	useTabs: false,
 	printWidth: 100,
 	singleQuote: true,
-	trailingComma: 'all' as const,
 	bracketSpacing: true,
-	arrowParens: 'always' as const,
 	endOfLine: 'lf' as const,
+	trailingComma: 'all' as const,
+	arrowParens: 'always' as const,
 };
 
 /**
@@ -88,13 +93,29 @@ test('rejects anonymous settings access', async () => {
 	);
 });
 
+/**
+|--------------------------------------------------
+| Rejects invalid formatting settings
+|--------------------------------------------------
+*/
 test('rejects invalid formatting settings', async () => {
+	/**
+	 |--------------------------------------------------
+	 | Set loading state
+	 |--------------------------------------------------
+	 */
 	const controller = new SettingsController(new InMemorySettingsRepository());
+
+	/**
+	 |--------------------------------------------------
+	 | Handle failure response
+	 |--------------------------------------------------
+	 */
 	await assert.rejects(() =>
 		controller.update(
 			{
-				provider: { id: 'reference' },
 				styleProfile: 'team-default',
+				provider: { id: 'reference' },
 				formatting: { ...formatting, tabWidth: 0 },
 			},
 			'user-1',

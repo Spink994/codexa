@@ -1,5 +1,16 @@
+/**
+|--------------------------------------------------
+| Npm imports
+|--------------------------------------------------
+*/
 import test from 'node:test';
 import assert from 'node:assert/strict';
+
+/**
+|--------------------------------------------------
+| Custom imports
+|--------------------------------------------------
+*/
 import { compareTypeScriptStructure } from './behavior-check.js';
 import { normalizeTypeScriptStyle } from './style-normalizer.js';
 
@@ -55,6 +66,9 @@ export const value = z.string();`;
 
 	assert.equal(result.changed, true);
 	assert.deepEqual(result.transforms, ['import-order', 'import-headings']);
-	assert.ok(result.formattedSource.indexOf("import z from 'zod';") < result.formattedSource.indexOf("import fs from 'node:fs';"));
+	assert.ok(
+		result.formattedSource.indexOf("import z from 'zod';") <
+			result.formattedSource.indexOf("import fs from 'node:fs';"),
+	);
 	assert.ok(result.formattedSource.indexOf("import A from '@/A';") < result.formattedSource.indexOf('import LongName'));
 });
