@@ -10,16 +10,19 @@ import { Module } from '@nestjs/common';
 | Custom imports
 |--------------------------------------------------
 */
-import { ConnectionsController } from './connections.controller.js';
-import { GithubModule } from '../github/github.module.js';
+import { GithubService } from './github.service.js';
 
 /**
 |--------------------------------------------------
-| Source-control connections module
+| Shared GitHub integration module
+|--------------------------------------------------
+| Provides a single GitHub client used by auth for
+| OAuth login, by connections for repo listing, and
+| by runs for opening pull requests.
 |--------------------------------------------------
 */
 @Module({
-	imports: [GithubModule],
-	controllers: [ConnectionsController],
+	providers: [GithubService],
+	exports: [GithubService],
 })
-export class ConnectionsModule {}
+export class GithubModule {}

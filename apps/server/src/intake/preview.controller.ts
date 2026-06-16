@@ -16,7 +16,7 @@ import { PreviewStore } from './preview.store.js';
 import { IntakeService } from './intake.service.js';
 import { CurrentUser } from '../auth/current-user.js';
 import type { PlanModule } from '../runs/run.types.js';
-import type { ConnectionProvider } from '../persistence/entities.js';
+import type { ConnectionProvider, RepositorySource } from '../persistence/entities.js';
 import { CONNECTION_REPOSITORY, type ConnectionRepository } from '../persistence/repositories.js';
 
 /**
@@ -90,7 +90,7 @@ export class PreviewController {
 	*/
 	@Post('repo')
 	async previewRepo(
-		@Body() body: { repoUrl?: string; token?: string },
+		@Body() body: { repoUrl?: string; token?: string; owner?: string; repo?: string; baseBranch?: string },
 		@CurrentUser() userId: string,
 	): Promise<PreviewResponse> {
 		/**
@@ -101,7 +101,14 @@ export class PreviewController {
 		if (!body.repoUrl) throw new BadRequestException('Missing "repoUrl".');
 		const token = body.token ?? (await this.resolveToken(userId, body.repoUrl));
 		const modules = await this.intake.fromRepo(body.repoUrl, token);
-		return this.store_(modules, userId);
+
+		/**
+		|--------------------------------------------------
+		| Capture the repository origin for later PRs
+		|--------------------------------------------------
+		*/
+		const repository = this.toRepositorySource(body.repoUrl, body.owner, body.repo, body.baseBranch);
+		return this.store_(modules, userId, repository);
 	}
 
 	/**
@@ -128,14 +135,14 @@ export class PreviewController {
 	| Store modules and build the preview response
 	|--------------------------------------------------
 	*/
-	private store_(modules: PlanModule[], userId: string): PreviewResponse {
+	private store_(modules: PlanModule[], userId: string, repository?: RepositorySource): PreviewResponse {
 		/**
 		|--------------------------------------------------
 		| Persist the planned modules for later selection
 		|--------------------------------------------------
 		*/
 		const previewId = randomUUID();
-		this.store.save({ id: previewId, userId, modules, source: '', createdAt: Date.now() });
+		this.store.save({ id: previewId, userId, modules, repository, source: '', createdAt: Date.now() });
 
 		/**
 		|--------------------------------------------------
@@ -160,6 +167,53 @@ export class PreviewController {
 		|--------------------------------------------------
 		*/
 		return { previewId, modules: summarized, totals: { files, estTokens } };
+	}
+
+	/**
+	|--------------------------------------------------
+	| Build a repository origin from a URL and hints
+	|--------------------------------------------------
+	*/
+	private toRepositorySource(
+		repoUrl: string,
+		owner?: string,
+		repo?: string,
+		baseBranch?: string,
+	): RepositorySource | undefined {
+		/**
+		|--------------------------------------------------
+		| Only GitHub repositories support pull requests
+		|--------------------------------------------------
+		*/
+		const provider: ConnectionProvider | undefined = repoUrl.includes('github')
+			? 'github'
+			: repoUrl.includes('gitlab')
+				? 'gitlab'
+				: undefined;
+		if (!provider) return undefined;
+
+		/**
+		|--------------------------------------------------
+		| Fall back to parsing owner and repo from the URL
+		|--------------------------------------------------
+		*/
+		const match = repoUrl.replace(/\.git$/, '').match(/[/:]([^/]+)\/([^/]+?)$/);
+		const resolvedOwner = owner ?? match?.[1];
+		const resolvedRepo = repo ?? match?.[2];
+		if (!resolvedOwner || !resolvedRepo) return undefined;
+
+		/**
+		|--------------------------------------------------
+		| Return the assembled repository origin
+		|--------------------------------------------------
+		*/
+		return {
+			provider,
+			url: repoUrl,
+			owner: resolvedOwner,
+			repo: resolvedRepo,
+			baseBranch: baseBranch || 'main',
+		};
 	}
 
 	/**

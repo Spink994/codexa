@@ -13,6 +13,7 @@ import { Module } from '@nestjs/common';
 import { RunsService } from './runs.service.js';
 import { RunsController } from './runs.controller.js';
 import { IntakeModule } from '../intake/intake.module.js';
+import { GithubModule } from '../github/github.module.js';
 import { ProvidersModule } from '../providers/providers.module.js';
 import { JOB_RUNNER, InProcessJobRunner } from './job-runner.js';
 
@@ -22,7 +23,7 @@ import { JOB_RUNNER, InProcessJobRunner } from './job-runner.js';
 |--------------------------------------------------
 */
 @Module({
-	imports: [IntakeModule, ProvidersModule],
+	imports: [IntakeModule, ProvidersModule, GithubModule],
 	controllers: [RunsController],
 	providers: [
 		RunsService,

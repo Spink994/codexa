@@ -57,6 +57,16 @@ export class FileUserRepository implements UserRepository {
 
 	/**
 	|--------------------------------------------------
+	| Replace an existing user record
+	|--------------------------------------------------
+	*/
+	async update(user: User): Promise<User> {
+		this.users.set(user);
+		return user;
+	}
+
+	/**
+	|--------------------------------------------------
 	| Find a user by email
 	|--------------------------------------------------
 	*/
@@ -71,6 +81,15 @@ export class FileUserRepository implements UserRepository {
 	*/
 	async findById(id: string): Promise<User | undefined> {
 		return this.users.get(id);
+	}
+
+	/**
+	|--------------------------------------------------
+	| Find a user by OAuth provider and identifier
+	|--------------------------------------------------
+	*/
+	async findByOauth(provider: NonNullable<User['oauthProvider']>, oauthId: string): Promise<User | undefined> {
+		return this.users.values().find((user) => user.oauthProvider === provider && user.oauthId === oauthId);
 	}
 }
 

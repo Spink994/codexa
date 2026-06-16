@@ -309,6 +309,25 @@ export class RunsController {
 
 	/**
 	|--------------------------------------------------
+	| Open a pull request from a completed run
+	|--------------------------------------------------
+	*/
+	@Post(':id/pull-request')
+	pullRequest(
+		@Param('id') id: string,
+		@Body() body: { title?: string; body?: string; branch?: string },
+		@CurrentUser() userId: string,
+	) {
+		/**
+		|--------------------------------------------------
+		| Create the pull request from the run's changes
+		|--------------------------------------------------
+		*/
+		return this.runs.createPullRequest(id, userId, body ?? {});
+	}
+
+	/**
+	|--------------------------------------------------
 	| Resolve a stored clone token for a repo URL
 	|--------------------------------------------------
 	*/

@@ -3,7 +3,9 @@
 | Npm imports
 |--------------------------------------------------
 */
-import { Get, Post, Body, Inject, Controller, BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { Get, Res, Post, Body, Query, Inject, Controller, BadRequestException } from '@nestjs/common';
+import type { Response } from 'express';
 
 /**
 |--------------------------------------------------
@@ -11,8 +13,15 @@ import { Get, Post, Body, Inject, Controller, BadRequestException } from '@nestj
 |--------------------------------------------------
 */
 import { AuthService } from './auth.service.js';
+import { createState, verifyState } from './token.js';
+import { GithubService } from '../github/github.service.js';
 import { CurrentUser, ANONYMOUS_USER } from './current-user.js';
-import { USER_REPOSITORY, type UserRepository } from '../persistence/repositories.js';
+import {
+	USER_REPOSITORY,
+	type UserRepository,
+	CONNECTION_REPOSITORY,
+	type ConnectionRepository,
+} from '../persistence/repositories.js';
 
 /**
 |--------------------------------------------------
@@ -38,8 +47,86 @@ export class AuthController {
 	*/
 	constructor(
 		private readonly auth: AuthService,
+		private readonly github: GithubService,
 		@Inject(USER_REPOSITORY) private readonly users: UserRepository,
+		@Inject(CONNECTION_REPOSITORY) private readonly connections: ConnectionRepository,
 	) {}
+
+	/**
+	|--------------------------------------------------
+	| Begin GitHub OAuth by redirecting to authorize
+	|--------------------------------------------------
+	*/
+	@Get('github')
+	startGithub(@Res() res: Response) {
+		/**
+		|--------------------------------------------------
+		| Redirect to GitHub with a signed CSRF state
+		|--------------------------------------------------
+		*/
+		res.redirect(this.github.buildAuthorizeUrl(createState()));
+	}
+
+	/**
+	|--------------------------------------------------
+	| Complete GitHub OAuth and hand a token to the web app
+	|--------------------------------------------------
+	*/
+	@Get('github/callback')
+	async githubCallback(@Query('code') code: string, @Query('state') state: string, @Res() res: Response) {
+		/**
+		|--------------------------------------------------
+		| Land back on the web login route on any failure
+		|--------------------------------------------------
+		*/
+		const redirect = `${this.github.webOrigin()}/login/callback`;
+		try {
+			/**
+			|--------------------------------------------------
+			| Reject a missing code or a forged state
+			|--------------------------------------------------
+			*/
+			if (!code) throw new BadRequestException('Missing authorization code.');
+			if (!verifyState(state)) throw new BadRequestException('Invalid or expired login state.');
+
+			/**
+			|--------------------------------------------------
+			| Exchange the code and resolve the GitHub profile
+			|--------------------------------------------------
+			*/
+			const token = await this.github.exchangeCode(code);
+			const profile = await this.github.getProfile(token);
+
+			/**
+			|--------------------------------------------------
+			| Sign in the account and store the clone token
+			|--------------------------------------------------
+			*/
+			const result = await this.auth.loginWithGithub(profile);
+			await this.connections.upsert({
+				id: randomUUID(),
+				userId: result.user.id,
+				provider: 'github',
+				accessToken: token,
+				createdAt: Date.now(),
+			});
+
+			/**
+			|--------------------------------------------------
+			| Return the session token in the URL fragment
+			|--------------------------------------------------
+			*/
+			res.redirect(`${redirect}#token=${encodeURIComponent(result.token)}`);
+		} catch (error) {
+			/**
+			|--------------------------------------------------
+			| Redirect with a readable error message
+			|--------------------------------------------------
+			*/
+			const message = error instanceof Error ? error.message : 'GitHub sign-in failed.';
+			res.redirect(`${redirect}#error=${encodeURIComponent(message)}`);
+		}
+	}
 
 	/**
 	|--------------------------------------------------

@@ -5,7 +5,7 @@
 */
 import { randomUUID } from 'node:crypto';
 import { Observable, ReplaySubject } from 'rxjs';
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 
 /**
 |--------------------------------------------------
@@ -25,11 +25,14 @@ import { PreviewStore } from '../intake/preview.store.js';
 import { ProviderFactory } from '../providers/provider.factory.js';
 import { JOB_RUNNER, type JobRunner } from './job-runner.js';
 import { ANONYMOUS_USER } from '../auth/current-user.js';
+import { GithubService } from '../github/github.service.js';
 import type { RunRecord } from '../persistence/entities.js';
 import {
 	RUN_REPOSITORY,
 	type RunRepository,
 	type RunHistoryQuery,
+	CONNECTION_REPOSITORY,
+	type ConnectionRepository,
 } from '../persistence/repositories.js';
 import type { RunEvent, RunState, PlanModule, ProviderConfig, CreateRunRequest } from './run.types.js';
 
@@ -93,6 +96,7 @@ interface CreateRunInput {
 	provider: ProviderConfig;
 	guidance?: Partial<SemanticFormatGuidance>;
 	formatting?: CodeFormatPreferences;
+	repository?: RunRecord['repository'];
 }
 
 /**
@@ -132,8 +136,10 @@ export class RunsService {
 		private readonly intake: IntakeService,
 		private readonly previews: PreviewStore,
 		private readonly providers: ProviderFactory,
+		private readonly github: GithubService,
 		@Inject(JOB_RUNNER) private readonly runner: JobRunner,
 		@Inject(RUN_REPOSITORY) private readonly repo: RunRepository,
+		@Inject(CONNECTION_REPOSITORY) private readonly connections: ConnectionRepository,
 	) {}
 
 	/**
@@ -239,6 +245,7 @@ export class RunsService {
 			modules,
 			provider: providerConfig,
 			formatting,
+			repository: entry.repository,
 			source: `selection:${modules.length} modules`,
 		});
 	}
@@ -270,6 +277,7 @@ export class RunsService {
 			createdAt: Date.now(),
 			userId: input.userId,
 			source: input.source,
+			repository: input.repository,
 			totalUnits: plan.jobs.length,
 		};
 		this.active.set(record.id, record);
@@ -502,6 +510,78 @@ export class RunsService {
 		const record = this.active.get(id) ?? (await this.repo.find(id));
 		if (!record || record.userId !== userId) throw new NotFoundException(`Run "${id}" was not found.`);
 		return record;
+	}
+
+	/**
+	|--------------------------------------------------
+	| Open a pull request from a completed run's output
+	|--------------------------------------------------
+	*/
+	async createPullRequest(
+		id: string,
+		userId: string,
+		options: { title?: string; body?: string; branch?: string } = {},
+	): Promise<{ url: string; number: number; viaFork: boolean }> {
+		/**
+		|--------------------------------------------------
+		| Require an owned, completed run with a repository
+		|--------------------------------------------------
+		*/
+		const record = await this.getRun(id, userId);
+		if (userId === ANONYMOUS_USER) throw new BadRequestException('Sign in to open a pull request.');
+		if (record.status !== 'completed') throw new BadRequestException('The run must finish before opening a pull request.');
+		if (!record.repository || record.repository.provider !== 'github') {
+			throw new BadRequestException('This run was not created from a GitHub repository.');
+		}
+
+		/**
+		|--------------------------------------------------
+		| Collect the changed files produced by the run
+		|--------------------------------------------------
+		*/
+		const files = record.results
+			.filter((result) => result.changed && result.status === 'formatted')
+			.map((result) => ({ path: result.path.replace(/^\/+/, ''), content: result.formattedSource }));
+		if (files.length === 0) throw new BadRequestException('No formatted changes to propose.');
+
+		/**
+		|--------------------------------------------------
+		| Require a stored GitHub token to push the branch
+		|--------------------------------------------------
+		*/
+		const connection = await this.connections.find(userId, 'github');
+		if (!connection) throw new BadRequestException('Connect a GitHub account before opening a pull request.');
+
+		/**
+		|--------------------------------------------------
+		| Open the pull request on the run's repository
+		|--------------------------------------------------
+		*/
+		const { repository } = record;
+		const branch = options.branch?.trim() || `codexa/format-${record.id.slice(0, 8)}`;
+		const pull = await this.github.openPullRequest(
+			connection.accessToken,
+			{
+				owner: repository.owner,
+				repo: repository.repo,
+				branch,
+				baseBranch: repository.baseBranch,
+				title: options.title?.trim() || `Codexa: format ${files.length} file${files.length === 1 ? '' : 's'}`,
+				body:
+					options.body?.trim() ||
+					`Automated formatting from Codexa run \`${record.id}\`.\n\nReformatted ${files.length} file${files.length === 1 ? '' : 's'} to the house style.`,
+			},
+			files,
+		);
+
+		/**
+		|--------------------------------------------------
+		| Persist the pull request URL on the run
+		|--------------------------------------------------
+		*/
+		record.pullRequestUrl = pull.url;
+		await this.persist(record);
+		return { url: pull.url, number: pull.number, viaFork: pull.viaFork };
 	}
 
 	/**

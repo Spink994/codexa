@@ -12,6 +12,7 @@ import { Inject, Injectable, ConflictException, UnauthorizedException } from '@n
 |--------------------------------------------------
 */
 import { createToken, hashPassword, verifyPassword } from './token.js';
+import type { GithubProfile } from '../github/github.service.js';
 import { USER_REPOSITORY, type UserRepository } from '../persistence/repositories.js';
 
 /**
@@ -94,7 +95,7 @@ export class AuthService {
 		|--------------------------------------------------
 		*/
 		const user = await this.users.findByEmail(email);
-		if (!user || !verifyPassword(password, user.passwordHash)) {
+		if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
 			throw new UnauthorizedException('Invalid email or password.');
 		}
 
@@ -103,6 +104,53 @@ export class AuthService {
 		| Return a signed token for the user
 		|--------------------------------------------------
 		*/
+		return { token: createToken(user.id), user: { id: user.id, email: user.email } };
+	}
+
+	/**
+	|--------------------------------------------------
+	| Sign in or provision an account from a GitHub profile
+	|--------------------------------------------------
+	*/
+	async loginWithGithub(profile: GithubProfile): Promise<AuthResult> {
+		/**
+		|--------------------------------------------------
+		| Resolve the email, synthesizing a noreply fallback
+		|--------------------------------------------------
+		*/
+		const email = (profile.email ?? `${profile.login}@users.noreply.github.com`).toLowerCase().trim();
+
+		/**
+		|--------------------------------------------------
+		| Return immediately for an already-linked account
+		|--------------------------------------------------
+		*/
+		const linked = await this.users.findByOauth('github', profile.id);
+		if (linked) return { token: createToken(linked.id), user: { id: linked.id, email: linked.email } };
+
+		/**
+		|--------------------------------------------------
+		| Link GitHub onto an existing same-email account
+		|--------------------------------------------------
+		*/
+		const existing = await this.users.findByEmail(email);
+		if (existing) {
+			const updated = await this.users.update({ ...existing, oauthProvider: 'github', oauthId: profile.id });
+			return { token: createToken(updated.id), user: { id: updated.id, email: updated.email } };
+		}
+
+		/**
+		|--------------------------------------------------
+		| Otherwise provision a fresh OAuth-only account
+		|--------------------------------------------------
+		*/
+		const user = await this.users.create({
+			email,
+			id: randomUUID(),
+			createdAt: Date.now(),
+			oauthProvider: 'github',
+			oauthId: profile.id,
+		});
 		return { token: createToken(user.id), user: { id: user.id, email: user.email } };
 	}
 }

@@ -7,7 +7,9 @@
 */
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useUiStore } from '@/store/ui-store';
+import { createPullRequest } from '@/lib/api';
 import { loadRunSource } from '@/lib/source-store';
 import { createZip, type ZipEntry } from '@/lib/browser-zip';
 
@@ -111,6 +113,22 @@ export function ReviewView({ run }: { run: RunState }) {
 	const [loadingSource, setLoadingSource] = useState(true);
 	const changedFiles = changedResults(run);
 	const formattedByPath = new Map(changedFiles.map((result) => [normalizePath(result.path), result]));
+
+	/**
+	|--------------------------------------------------
+	| Track and open a pull request for repository runs
+	|--------------------------------------------------
+	*/
+	const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(run.pullRequestUrl ?? null);
+	const pullRequest = useMutation({
+		mutationFn: () => createPullRequest(run.id),
+		onSuccess: (result) => {
+			setPullRequestUrl(result.url);
+			pushToast(`Opened pull request #${result.number}${result.viaFork ? ' from your fork' : ''}`, 'success');
+		},
+		onError: (error: Error) => pushToast(error.message, 'error'),
+	});
+	const canOpenPr = Boolean(run.repository && run.status === 'completed' && changedFiles.length > 0);
 
 	/**
 	|--------------------------------------------------
@@ -225,6 +243,25 @@ export function ReviewView({ run }: { run: RunState }) {
 					<Badge tone={runStatusTone(run.status)}>{run.status}</Badge>
 				</div>
 				<div className="flex flex-wrap gap-2">
+					{/**
+					|--------------------------------------------------
+					| Open or view a pull request for repository runs
+					|--------------------------------------------------
+					*/}
+					{canOpenPr &&
+						(pullRequestUrl ? (
+							<a href={pullRequestUrl} target="_blank" rel="noreferrer">
+								<Button variant="primary">
+									<Icon name="git" /> View pull request
+								</Button>
+							</a>
+						) : (
+							<Button variant="primary" onClick={() => pullRequest.mutate()} disabled={pullRequest.isPending}>
+								<Icon name="git" className={pullRequest.isPending ? 'animate-cx-spin' : ''} />
+								{pullRequest.isPending ? 'Opening pull request…' : 'Create pull request'}
+							</Button>
+						))}
+
 					{/**
 					|--------------------------------------------------
 					| Download the rebuilt folder with replacements

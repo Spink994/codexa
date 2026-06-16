@@ -14,6 +14,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthService } from './auth.service.js';
 import { AuthContextGuard } from './current-user.js';
 import { AuthController } from './auth.controller.js';
+import { GithubModule } from '../github/github.module.js';
 
 /**
 |--------------------------------------------------
@@ -21,6 +22,7 @@ import { AuthController } from './auth.controller.js';
 |--------------------------------------------------
 */
 @Module({
+	imports: [GithubModule],
 	controllers: [AuthController],
 	providers: [
 		AuthService,

@@ -2,21 +2,24 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
-import { createSnippetRun, previewUpload } from '@/lib/api';
+import { createSnippetRun, previewUpload, previewRepo, listGithubRepos } from '@/lib/api';
 import {
 	folderFilesFromDrop,
 	zipFiles,
 	type FolderFile,
 } from '@/lib/browser-zip';
+import type { GithubRepo } from '@/lib/types';
 import { useUiStore } from '@/store/ui-store';
+import { useAuthStore } from '@/store/auth-store';
 
-type Mode = 'zip' | 'folder' | 'file' | 'snippet';
+type Mode = 'zip' | 'folder' | 'file' | 'snippet' | 'repo';
 type Phase = 'input' | 'scanning' | 'complete';
 
 const MODES: { id: Mode; label: string; detail: string; icon: IconName }[] = [
+	{ id: 'repo', label: 'GitHub repository', detail: 'Pull a repo you can open a PR against', icon: 'git' },
 	{ id: 'zip', label: 'Upload a ZIP', detail: 'Scan a complete backend project archive', icon: 'archive' },
 	{ id: 'folder', label: 'Choose a folder', detail: 'Select a project directory from this device', icon: 'folder' },
 	{ id: 'file', label: 'Add a file', detail: 'Format one TypeScript or JavaScript file', icon: 'file' },
@@ -37,6 +40,15 @@ export function IntakeForm() {
 	const [filename, setFilename] = useState('snippet.ts');
 	const [content, setContent] = useState('');
 	const [visibleRows, setVisibleRows] = useState(0);
+	const [selectedRepo, setSelectedRepo] = useState<GithubRepo | null>(null);
+	const [repoSearch, setRepoSearch] = useState('');
+	const user = useAuthStore((state) => state.user);
+	const reposQuery = useQuery({
+		queryKey: ['github-repos'],
+		queryFn: listGithubRepos,
+		enabled: mode === 'repo' && Boolean(user),
+		staleTime: 60_000,
+	});
 	const preview = useUiStore((state) => state.preview);
 	const provider = useUiStore((state) => state.provider);
 	const formatting = useUiStore((state) => state.formatting);
@@ -63,6 +75,17 @@ export function IntakeForm() {
 			if (mode === 'folder') {
 				if (folderFiles.length === 0) throw new Error('Choose a project folder first.');
 				return { kind: 'preview' as const, preview: await previewUpload(await zipFiles(folderFiles)) };
+			}
+			if (mode === 'repo') {
+				if (!selectedRepo) throw new Error('Choose a repository first.');
+				return {
+					kind: 'preview' as const,
+					preview: await previewRepo(selectedRepo.cloneUrl, undefined, {
+						owner: selectedRepo.owner,
+						repo: selectedRepo.name,
+						baseBranch: selectedRepo.defaultBranch,
+					}),
+				};
 			}
 			if (mode === 'file') {
 				if (!file) throw new Error('Choose a source file first.');
@@ -103,7 +126,7 @@ export function IntakeForm() {
 		else if (mode === 'zip' && file) setUploadSource({ kind: 'zip', file });
 		else setUploadSource(null);
 		setVisibleRows(0);
-		setPhase(mode === 'zip' || mode === 'folder' ? 'scanning' : 'input');
+		setPhase(mode === 'zip' || mode === 'folder' || mode === 'repo' ? 'scanning' : 'input');
 		mutation.mutate();
 	};
 
@@ -297,6 +320,15 @@ export function IntakeForm() {
 							/>
 						</label>
 					</div>
+				) : mode === 'repo' ? (
+					<RepoPicker
+						user={Boolean(user)}
+						query={reposQuery}
+						search={repoSearch}
+						selected={selectedRepo}
+						onSearch={setRepoSearch}
+						onSelect={setSelectedRepo}
+					/>
 				) : (
 					<div
 						onDragEnter={(event) => {
@@ -501,11 +533,12 @@ export function IntakeForm() {
 						(mode === 'zip' && !file) ||
 						(mode === 'folder' && folderFiles.length === 0) ||
 						(mode === 'file' && !file) ||
+						(mode === 'repo' && !selectedRepo) ||
 						(mode === 'snippet' && !content.trim())
 					}
 					onClick={start}
 				>
-					{mode === 'zip' || mode === 'folder' ? 'Scan source' : 'Format source'}
+					{mode === 'snippet' || mode === 'file' ? 'Format source' : 'Scan source'}
 					<Icon name="arrow-right" />
 				</Button>
 			</div>
@@ -533,3 +566,126 @@ const formatBytes = (bytes: number): string => {
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes >= 10240 ? 0 : 1)} KB`;
 	return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
 };
+
+/**
+|--------------------------------------------------
+| Picker for a connected GitHub repository
+|--------------------------------------------------
+*/
+function RepoPicker({
+	user,
+	query,
+	search,
+	selected,
+	onSearch,
+	onSelect,
+}: {
+	user: boolean;
+	query: UseQueryResult<GithubRepo[]>;
+	search: string;
+	selected: GithubRepo | null;
+	onSearch: (value: string) => void;
+	onSelect: (repo: GithubRepo) => void;
+}) {
+	/**
+	|--------------------------------------------------
+	| Prompt anonymous visitors to connect GitHub first
+	|--------------------------------------------------
+	*/
+	if (!user) {
+		return (
+			<div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+				<span className="text-2xl text-accent">
+					<Icon name="git" />
+				</span>
+				<p className="max-w-sm text-[12.5px] text-fg-muted">
+					Sign in with GitHub to list the repositories you can format and open pull requests against.
+				</p>
+				<a
+					href="/login"
+					className="flex items-center gap-2 rounded-md border border-line-strong bg-bg px-3 py-2 text-[12.5px] font-medium text-fg transition hover:bg-[var(--list-hover)]"
+				>
+					<Icon name="git" />
+					Continue with GitHub
+				</a>
+			</div>
+		);
+	}
+
+	/**
+	|--------------------------------------------------
+	| Filter repositories by the current search term
+	|--------------------------------------------------
+	*/
+	const term = search.trim().toLowerCase();
+	const repos = (query.data ?? []).filter((repo) => !term || repo.fullName.toLowerCase().includes(term));
+
+	/**
+	|--------------------------------------------------
+	| Render the search box and selectable repo list
+	|--------------------------------------------------
+	*/
+	return (
+		<div className="space-y-3">
+			<label className="flex items-center gap-2.5 rounded-md border border-line-strong bg-bg px-3 py-2.5 focus-within:border-primary">
+				<span className="text-[15px] text-fg-muted">
+					<Icon name="search" />
+				</span>
+				<input
+					value={search}
+					placeholder="Search your repositories…"
+					onChange={(event) => onSearch(event.target.value)}
+					className="min-w-0 flex-1 border-0 bg-transparent text-[12.5px] text-fg outline-none placeholder:text-fg-muted"
+				/>
+			</label>
+
+			<div className="cx-scroll max-h-[clamp(180px,42vh,380px)] overflow-auto rounded-lg border border-line bg-bg">
+				{query.isLoading ? (
+					<div className="flex items-center gap-2.5 px-3.5 py-4 text-[12.5px] text-fg-muted">
+						<span className="animate-cx-spin">
+							<Icon name="sync" />
+						</span>
+						Loading repositories…
+					</div>
+				) : query.isError ? (
+					<div className="px-3.5 py-4 text-[12.5px] text-error">
+						{query.error instanceof Error ? query.error.message : 'Could not load repositories.'}
+					</div>
+				) : repos.length === 0 ? (
+					<div className="px-3.5 py-4 text-[12.5px] text-fg-muted">No repositories match that search.</div>
+				) : (
+					repos.map((repo) => {
+						const active = selected?.fullName === repo.fullName;
+						return (
+							<button
+								key={repo.fullName}
+								type="button"
+								onClick={() => onSelect(repo)}
+								className={`flex w-full items-center gap-2.5 border-b border-line px-3.5 py-2.5 text-left text-[12.5px] transition last:border-b-0 ${
+									active ? 'bg-info-bg' : 'hover:bg-[var(--list-hover)]'
+								}`}
+							>
+								<span className={active ? 'text-link' : 'text-fg-muted'}>
+									<Icon name={active ? 'check' : 'git'} />
+								</span>
+								<span className="min-w-0 flex-1 truncate font-mono">{repo.fullName}</span>
+								{repo.private && (
+									<span className="rounded-full border border-line bg-bg-2 px-2 py-0.5 text-[10px] text-fg-muted">private</span>
+								)}
+								{!repo.canPush && (
+									<span
+										title="You cannot push here — Codexa will fork and open the PR from your fork."
+										className="rounded-full border border-line bg-bg-2 px-2 py-0.5 text-[10px] text-fg-muted"
+									>
+										via fork
+									</span>
+								)}
+								<span className="text-[11px] text-fg-muted">{repo.defaultBranch}</span>
+							</button>
+						);
+					})
+				)}
+			</div>
+		</div>
+	);
+}

@@ -8,10 +8,14 @@ import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 
 /**
 |--------------------------------------------------
-| Resolve the signing secret
+| Resolve the signing secret at call time
+|--------------------------------------------------
+| Read lazily so a secret supplied through a .env file
+| loaded during bootstrap is honored, not just one
+| exported before this module was imported.
 |--------------------------------------------------
 */
-const SECRET = process.env.CODEXA_AUTH_SECRET || 'codexa-dev-secret-change-me';
+const secret = (): string => process.env.CODEXA_AUTH_SECRET || 'codexa-dev-secret-change-me';
 
 /**
 |--------------------------------------------------
@@ -72,8 +76,65 @@ export const createToken = (userId: string): string => {
 	|--------------------------------------------------
 	*/
 	const payload = encode(JSON.stringify({ userId }));
-	const signature = createHmac('sha256', SECRET).update(payload).digest('base64url');
+	const signature = createHmac('sha256', secret()).update(payload).digest('base64url');
 	return `${payload}.${signature}`;
+};
+
+/**
+|--------------------------------------------------
+| Sign a short-lived OAuth state nonce
+|--------------------------------------------------
+| Guards the GitHub redirect against CSRF by binding
+| the callback to a value this server issued and can
+| verify, with an embedded expiry.
+|--------------------------------------------------
+*/
+export const createState = (ttlMs: number = 10 * 60 * 1000): string => {
+	/**
+	|--------------------------------------------------
+	| Encode an expiring nonce and sign it
+	|--------------------------------------------------
+	*/
+	const payload = encode(JSON.stringify({ nonce: randomBytes(12).toString('hex'), expiresAt: Date.now() + ttlMs }));
+	const signature = createHmac('sha256', secret()).update(payload).digest('base64url');
+	return `${payload}.${signature}`;
+};
+
+/**
+|--------------------------------------------------
+| Verify an OAuth state nonce has not expired
+|--------------------------------------------------
+*/
+export const verifyState = (state: string): boolean => {
+	/**
+	|--------------------------------------------------
+	| Split the state into payload and signature
+	|--------------------------------------------------
+	*/
+	const [payload, signature] = state.split('.');
+	if (!payload || !signature) return false;
+
+	/**
+	|--------------------------------------------------
+	| Recompute and compare the signature
+	|--------------------------------------------------
+	*/
+	const expected = createHmac('sha256', secret()).update(payload).digest('base64url');
+	if (expected.length !== signature.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) {
+		return false;
+	}
+
+	/**
+	|--------------------------------------------------
+	| Decode the payload and enforce its expiry
+	|--------------------------------------------------
+	*/
+	try {
+		const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { expiresAt?: number };
+		return typeof decoded.expiresAt === 'number' && decoded.expiresAt > Date.now();
+	} catch {
+		return false;
+	}
 };
 
 /**
@@ -95,7 +156,7 @@ export const verifyToken = (token: string): string | undefined => {
 	| Recompute and compare the signature
 	|--------------------------------------------------
 	*/
-	const expected = createHmac('sha256', SECRET).update(payload).digest('base64url');
+	const expected = createHmac('sha256', secret()).update(payload).digest('base64url');
 	if (expected.length !== signature.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) {
 		return undefined;
 	}

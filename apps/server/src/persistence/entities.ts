@@ -28,10 +28,14 @@ export interface User {
 
 	/**
 	|--------------------------------------------------
-	| Salted password hash
+	| Salted password hash, absent for OAuth-only accounts
 	|--------------------------------------------------
 	*/
-	passwordHash: string;
+	passwordHash?: string;
+
+	oauthProvider?: 'github';
+
+	oauthId?: string;
 
 	/**
 	|--------------------------------------------------
@@ -193,4 +197,21 @@ export interface RunRecord extends RunState {
 	|--------------------------------------------------
 	*/
 	source: string;
+
+	repository?: RepositorySource;
+
+	/**
+	|--------------------------------------------------
+	| URL of the pull request opened from this run
+	|--------------------------------------------------
+	*/
+	pullRequestUrl?: string;
+}
+
+export interface RepositorySource {
+	provider: ConnectionProvider;
+	owner: string;
+	repo: string;
+	url: string;
+	baseBranch: string;
 }

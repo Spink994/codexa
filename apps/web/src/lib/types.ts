@@ -99,6 +99,46 @@ export interface SourceConnection {
 
 /**
 |--------------------------------------------------
+| A repository the connected GitHub user can push to
+|--------------------------------------------------
+*/
+export interface GithubRepo {
+	owner: string;
+	name: string;
+	fullName: string;
+	cloneUrl: string;
+	defaultBranch: string;
+	private: boolean;
+	canPush: boolean;
+	updatedAt: string;
+}
+
+/**
+|--------------------------------------------------
+| Repository origin captured for a run
+|--------------------------------------------------
+*/
+export interface RepositorySource {
+	provider: 'github' | 'gitlab';
+	owner: string;
+	repo: string;
+	url: string;
+	baseBranch: string;
+}
+
+/**
+|--------------------------------------------------
+| Pull request opened from a run
+|--------------------------------------------------
+*/
+export interface PullRequestResult {
+	url: string;
+	number: number;
+	viaFork: boolean;
+}
+
+/**
+|--------------------------------------------------
 | Terminal and transient run status
 |--------------------------------------------------
 */
@@ -159,6 +199,8 @@ export interface RunState {
 	completedUnits: number;
 	results: UnitResult[];
 	error?: string;
+	repository?: RepositorySource;
+	pullRequestUrl?: string;
 }
 
 /**

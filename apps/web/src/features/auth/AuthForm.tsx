@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 */
 import { Icon } from '@/components/Icon';
 import { Button } from '@/components/Button';
+import { githubAuthUrl } from '@/lib/api';
 import { useUiStore } from '@/store/ui-store';
 import { useAuthStore } from '@/store/auth-store';
 
@@ -154,6 +155,35 @@ export function AuthForm({ initialMode = 'login' }: { initialMode?: Mode }) {
 								{option === 'login' ? 'Sign in' : 'Create account'}
 							</button>
 						))}
+					</div>
+
+					{/**
+					|--------------------------------------------------
+					| GitHub sign-in
+					|--------------------------------------------------
+					*/}
+					<button
+						type="button"
+						onClick={() => {
+							window.location.href = githubAuthUrl();
+						}}
+						className="mb-4 flex w-full items-center justify-center gap-2 rounded-md border border-line-strong bg-bg px-3 py-2.5 text-[12.5px] font-medium text-fg transition hover:bg-[var(--list-hover)]"
+					>
+						<span className="text-[15px]">
+							<Icon name="git" />
+						</span>
+						Continue with GitHub
+					</button>
+
+					{/**
+					|--------------------------------------------------
+					| Divider between OAuth and credentials
+					|--------------------------------------------------
+					*/}
+					<div className="mb-4 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.6px] text-fg-muted">
+						<span className="h-px flex-1 bg-line" />
+						or use email
+						<span className="h-px flex-1 bg-line" />
 					</div>
 
 					{/**

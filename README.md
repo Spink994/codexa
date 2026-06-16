@@ -88,6 +88,54 @@ If the API is running somewhere else, set the frontend base URL:
 NEXT_PUBLIC_API_BASE=http://localhost:4000
 ```
 
+## GitHub sign-in and pull requests
+
+Codexa can sign users in with GitHub, pull a repository they can push to, format selected files, and open a pull request with the result — all without leaving the web app.
+
+### 1. Register a GitHub OAuth App
+
+Create an OAuth App at **GitHub → Settings → Developer settings → OAuth Apps** with:
+
+| Field | Value |
+| --- | --- |
+| Homepage URL | `http://localhost:3001` |
+| Authorization callback URL | `http://localhost:4000/auth/github/callback` |
+
+### 2. Configure the API server
+
+Copy the template and fill in your OAuth credentials:
+
+```bash
+cp .env.example .env
+```
+
+The server loads `.env` from the repo root automatically on start (real shell variables still take precedence). For the web app, copy `apps/web/.env.example` to `apps/web/.env.local`. These variables are read:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `CODEXA_GITHUB_CLIENT_ID` | OAuth App client id | — (required) |
+| `CODEXA_GITHUB_CLIENT_SECRET` | OAuth App client secret | — (required) |
+| `CODEXA_GITHUB_CALLBACK_URL` | OAuth redirect URI | `http://localhost:4000/auth/github/callback` |
+| `CODEXA_GITHUB_SCOPES` | Requested OAuth scopes | `repo read:user user:email` |
+| `CODEXA_WEB_ORIGIN` | Web origin the callback returns to | `http://localhost:3001` |
+| `CODEXA_AUTH_SECRET` | Secret for signing session tokens and OAuth state | `codexa-dev-secret-change-me` |
+
+The `repo` scope is what lets Codexa create a branch and open a pull request on a repository the user can push to.
+
+### 3. The flow
+
+```text
+Continue with GitHub  ->  pick a repository  ->  select files  ->  format  ->  Create pull request
+        OAuth                /connections/github/repos        run engine        Git Data API branch + PR
+```
+
+When you open a pull request, Codexa checks whether you can push to the repository:
+
+- **Push access** — it creates a branch (`codexa/format-<run>`) directly on the repository and opens the PR.
+- **Read-only access** — it forks the repository to your account, commits the branch there, and opens a cross-repository PR back to the original (`maintainer_can_modify` enabled). The repository picker marks these with a **via fork** badge.
+
+Either way the PR targets the repository's default branch.
+
 ## Using Codexa
 
 ```text
@@ -115,10 +163,11 @@ Remote providers may receive the selected source code. Read [docs/PRIVACY.md](do
 
 ### 2. Add source
 
-Codexa supports four intake modes:
+Codexa supports five intake modes:
 
 | Mode | Best for |
 | --- | --- |
+| GitHub repository | Pulling a connected repo and opening a pull request with the result |
 | Upload a ZIP | Full projects and reproducible archives |
 | Choose a folder | Local browser-based project selection |
 | Add a file | One TypeScript or JavaScript file |

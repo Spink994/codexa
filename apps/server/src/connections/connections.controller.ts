@@ -11,6 +11,7 @@ import { Get, Post, Body, Param, Inject, Delete, Controller, UnauthorizedExcepti
 | Custom imports
 |--------------------------------------------------
 */
+import { GithubService } from '../github/github.service.js';
 import { CurrentUser, ANONYMOUS_USER } from '../auth/current-user.js';
 import type { ConnectionProvider } from '../persistence/entities.js';
 import { CONNECTION_REPOSITORY, type ConnectionRepository } from '../persistence/repositories.js';
@@ -41,7 +42,34 @@ export class ConnectionsController {
 	| Inject the connection repository
 	|--------------------------------------------------
 	*/
-	constructor(@Inject(CONNECTION_REPOSITORY) private readonly connections: ConnectionRepository) {}
+	constructor(
+		private readonly github: GithubService,
+		@Inject(CONNECTION_REPOSITORY) private readonly connections: ConnectionRepository,
+	) {}
+
+	/**
+	|--------------------------------------------------
+	| List repositories the connected GitHub user can push to
+	|--------------------------------------------------
+	*/
+	@Get('github/repos')
+	async githubRepos(@CurrentUser() userId: string) {
+		/**
+		|--------------------------------------------------
+		| Require a signed-in user with a GitHub connection
+		|--------------------------------------------------
+		*/
+		this.requireAccount(userId);
+		const connection = await this.connections.find(userId, 'github');
+		if (!connection) throw new BadRequestException('Connect a GitHub account first.');
+
+		/**
+		|--------------------------------------------------
+		| List the repositories behind the stored token
+		|--------------------------------------------------
+		*/
+		return this.github.listRepos(connection.accessToken);
+	}
 
 	/**
 	|--------------------------------------------------

@@ -11,6 +11,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 |--------------------------------------------------
 */
 import type { PlanModule } from '../runs/run.types.js';
+import type { RepositorySource } from '../persistence/entities.js';
 
 /**
 |--------------------------------------------------
@@ -23,6 +24,13 @@ interface PreviewEntry {
 	source: string;
 	createdAt: number;
 	modules: PlanModule[];
+
+	/**
+	|--------------------------------------------------
+	| Repository origin when previewed from a clone
+	|--------------------------------------------------
+	*/
+	repository?: RepositorySource;
 }
 
 /**

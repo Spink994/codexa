@@ -7,6 +7,7 @@ import { getToken } from './auth-token';
 import type {
 	RunState,
 	AuthUser,
+	GithubRepo,
 	RunSummary,
 	RunHistoryQuery,
 	RunHistoryResult,
@@ -14,6 +15,7 @@ import type {
 	ProviderConfig,
 	PreviewResponse,
 	ProviderDescriptor,
+	PullRequestResult,
 	CreateSnippetRequest,
 	ConnectionTestResult,
 	AccountSettings,
@@ -262,17 +264,49 @@ export const previewUpload = async (file: File): Promise<PreviewResponse> => {
 | Preview a git repository
 |--------------------------------------------------
 */
-export const previewRepo = (repoUrl: string, token?: string): Promise<PreviewResponse> => {
+export const previewRepo = (
+	repoUrl: string,
+	token?: string,
+	meta?: { owner?: string; repo?: string; baseBranch?: string },
+): Promise<PreviewResponse> => {
 	/**
 	|--------------------------------------------------
-	| Post the repository for preview
+	| Post the repository and origin hints for preview
 	|--------------------------------------------------
 	*/
 	return requestJson<PreviewResponse>('/intake/preview/repo', {
 		method: 'POST',
-		body: JSON.stringify({ repoUrl, token: token || undefined }),
+		body: JSON.stringify({ repoUrl, token: token || undefined, ...meta }),
 	});
 };
+
+/**
+|--------------------------------------------------
+| Build the GitHub OAuth login entry point URL
+|--------------------------------------------------
+*/
+export const githubAuthUrl = (): string => `${API_BASE}/auth/github`;
+
+/**
+|--------------------------------------------------
+| List repositories the connected GitHub user can push to
+|--------------------------------------------------
+*/
+export const listGithubRepos = (): Promise<GithubRepo[]> => requestJson<GithubRepo[]>('/connections/github/repos');
+
+/**
+|--------------------------------------------------
+| Open a pull request from a completed run
+|--------------------------------------------------
+*/
+export const createPullRequest = (
+	runId: string,
+	body?: { title?: string; body?: string; branch?: string },
+): Promise<PullRequestResult> =>
+	requestJson<PullRequestResult>(`/runs/${runId}/pull-request`, {
+		method: 'POST',
+		body: JSON.stringify(body ?? {}),
+	});
 
 /**
 |--------------------------------------------------

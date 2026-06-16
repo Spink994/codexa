@@ -25,8 +25,10 @@ export interface RunHistoryPage {
 */
 export interface UserRepository {
 	create(user: User): Promise<User>;
+	update(user: User): Promise<User>;
 	findByEmail(email: string): Promise<User | undefined>;
 	findById(id: string): Promise<User | undefined>;
+	findByOauth(provider: NonNullable<User['oauthProvider']>, oauthId: string): Promise<User | undefined>;
 }
 
 /**

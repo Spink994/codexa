@@ -16,8 +16,9 @@ import { RunsService } from './runs.service.js';
 import { InProcessJobRunner } from './job-runner.js';
 import { IntakeService } from '../intake/intake.service.js';
 import { PreviewStore } from '../intake/preview.store.js';
+import { GithubService } from '../github/github.service.js';
 import { ProviderFactory } from '../providers/provider.factory.js';
-import { InMemoryRunRepository } from '../persistence/in-memory.js';
+import { InMemoryRunRepository, InMemoryConnectionRepository } from '../persistence/in-memory.js';
 import type { CreateRunRequest, RunEvent } from './run.types.js';
 
 /**
@@ -35,8 +36,10 @@ const buildService = (): RunsService => {
 		new IntakeService(),
 		new PreviewStore(),
 		new ProviderFactory(),
+		new GithubService(),
 		new InProcessJobRunner(),
 		new InMemoryRunRepository(),
+		new InMemoryConnectionRepository(),
 	);
 };
 

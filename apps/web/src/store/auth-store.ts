@@ -91,6 +91,13 @@ interface AuthState {
 
 	/**
 	|--------------------------------------------------
+	| Complete an OAuth sign-in from a returned token
+	|--------------------------------------------------
+	*/
+	completeOauth: (token: string) => Promise<void>;
+
+	/**
+	|--------------------------------------------------
 	| Sign out and clear the token
 	|--------------------------------------------------
 	*/
@@ -174,6 +181,36 @@ export const useAuthStore = create<AuthState>((set) => ({
 			/* keep the authenticated session and current device settings */
 		}
 		void syncLocalRuns();
+	},
+
+	/**
+	|--------------------------------------------------
+	| Complete an OAuth sign-in from a returned token
+	|--------------------------------------------------
+	*/
+	completeOauth: async (token) => {
+		/**
+		|--------------------------------------------------
+		| Persist the token, then resolve the session
+		|--------------------------------------------------
+		*/
+		setToken(token);
+		const result = await getMe();
+		set({ user: result.authenticated ? (result.user ?? null) : null, ready: true });
+
+		/**
+		|--------------------------------------------------
+		| Hydrate settings and claim any local runs
+		|--------------------------------------------------
+		*/
+		if (result.authenticated) {
+			try {
+				await hydrateSettings();
+			} catch {
+				/* session remains valid when settings sync is temporarily unavailable */
+			}
+			void syncLocalRuns();
+		}
 	},
 
 	/**
