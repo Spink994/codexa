@@ -25,7 +25,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 */
 import { RunsService } from './runs.service.js';
 import { CurrentUser, ANONYMOUS_USER } from '../auth/current-user.js';
-import type { ConnectionProvider } from '../persistence/entities.js';
+import type { ConnectionProvider, RepositorySource } from '../persistence/entities.js';
 import type { CodeFormatPreferences } from '@codexa/provider';
 import type { RunState, ProviderConfig, CreateRunRequest } from './run.types.js';
 import { CONNECTION_REPOSITORY, type ConnectionRepository } from '../persistence/repositories.js';
@@ -139,6 +139,37 @@ export class RunsController {
 		|--------------------------------------------------
 		*/
 		return this.runs.createFromPreview(body.previewId, body.selectedPaths, body.provider, userId, body.formatting);
+	}
+
+	/**
+	|--------------------------------------------------
+	| Rerun the formatter on files from a prior run
+	|--------------------------------------------------
+	*/
+	@Post('rerun')
+	rerun(
+		@Body() body: {
+			provider?: ProviderConfig;
+			formatting?: CodeFormatPreferences;
+			files?: { path: string; source: string; moduleId?: string }[];
+			repository?: RepositorySource;
+		},
+		@CurrentUser() userId: string,
+	) {
+		/**
+		|--------------------------------------------------
+		| Validate the rerun request
+		|--------------------------------------------------
+		*/
+		if (!body.provider) throw new BadRequestException('Missing "provider" configuration.');
+		if (!body.files?.length) throw new BadRequestException('Select at least one file to rerun.');
+
+		/**
+		|--------------------------------------------------
+		| Start a fresh run over the supplied files
+		|--------------------------------------------------
+		*/
+		return this.runs.createRerun(body.provider, body.files, userId, body.formatting, body.repository);
 	}
 
 	/**

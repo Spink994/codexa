@@ -252,6 +252,34 @@ export class RunsService {
 
 	/**
 	|--------------------------------------------------
+	| Create a run that reformats prior run files
+	|--------------------------------------------------
+	*/
+	createRerun(
+		providerConfig: ProviderConfig,
+		files: { path: string; source: string; moduleId?: string }[],
+		userId: string,
+		formatting?: CodeFormatPreferences,
+		repository?: RunRecord['repository'],
+	): RunRecord {
+		/**
+		|--------------------------------------------------
+		| Rebuild modules from the supplied files and start
+		|--------------------------------------------------
+		*/
+		const modules = this.intake.fromUnits(files);
+		return this.createRun({
+			userId,
+			modules,
+			repository,
+			formatting,
+			provider: providerConfig,
+			source: `rerun:${files.length} file${files.length === 1 ? '' : 's'}`,
+		});
+	}
+
+	/**
+	|--------------------------------------------------
 	| Create a run from prepared plan modules
 	|--------------------------------------------------
 	*/

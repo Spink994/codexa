@@ -171,6 +171,49 @@ export class IntakeService {
 
 	/**
 	|--------------------------------------------------
+	| Build plan modules from prior run units
+	|--------------------------------------------------
+	| Used by rerun: rebuilds modules from the original
+	| source captured on each result, preserving the
+	| module each file belonged to.
+	|--------------------------------------------------
+	*/
+	fromUnits(units: { path: string; source: string; moduleId?: string }[]): PlanModule[] {
+		/**
+		|--------------------------------------------------
+		| Reject an empty rerun selection
+		|--------------------------------------------------
+		*/
+		if (units.length === 0) throw new BadRequestException('No files to rerun.');
+
+		/**
+		|--------------------------------------------------
+		| Group files under their originating module
+		|--------------------------------------------------
+		*/
+		const byModule = new Map<string, PlanModule['files']>();
+		units.forEach((unit) => {
+			/**
+			|--------------------------------------------------
+			| Fall back to the parent directory as the module
+			|--------------------------------------------------
+			*/
+			const id = unit.moduleId || unit.path.slice(0, unit.path.lastIndexOf('/')) || '/';
+			const files = byModule.get(id) ?? [];
+			files.push({ path: unit.path, source: unit.source, language: this.detectLanguage(unit.path) });
+			byModule.set(id, files);
+		});
+
+		/**
+		|--------------------------------------------------
+		| Return one module per originating module id
+		|--------------------------------------------------
+		*/
+		return Array.from(byModule.entries()).map(([id, files]) => ({ id, files }));
+	}
+
+	/**
+	|--------------------------------------------------
 	| Build plan modules from a directory tree
 	|--------------------------------------------------
 	*/

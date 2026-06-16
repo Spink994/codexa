@@ -14,6 +14,7 @@ import type {
 	AuthResponse,
 	ProviderConfig,
 	PreviewResponse,
+	RepositorySource,
 	ProviderDescriptor,
 	PullRequestResult,
 	CreateSnippetRequest,
@@ -321,6 +322,22 @@ export const getPreviewSources = (previewId: string): Promise<{ files: { path: s
 	*/
 	return requestJson<{ files: { path: string; source: string }[] }>(`/intake/preview/${previewId}/sources`);
 };
+
+/**
+|--------------------------------------------------
+| Rerun the formatter on files from a prior run
+|--------------------------------------------------
+*/
+export const rerunRun = (
+	provider: ProviderConfig,
+	formatting: CodeFormatPreferences,
+	files: { path: string; source: string; moduleId: string }[],
+	repository?: RepositorySource,
+): Promise<RunState> =>
+	requestJson<RunState>('/runs/rerun', {
+		method: 'POST',
+		body: JSON.stringify({ provider, formatting, files, repository }),
+	});
 
 /**
 |--------------------------------------------------

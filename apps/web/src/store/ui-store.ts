@@ -108,6 +108,16 @@ interface UiState {
 
 	/**
 	|--------------------------------------------------
+	| Persisted file selection for the current preview
+	|--------------------------------------------------
+	| Survives navigation so returning to selection keeps
+	| the files chosen earlier, scoped to the preview id.
+	|--------------------------------------------------
+	*/
+	selection: { previewId: string; paths: string[] } | null;
+
+	/**
+	|--------------------------------------------------
 	| Original upload kept for folder reconstruction
 	|--------------------------------------------------
 	*/
@@ -140,6 +150,13 @@ interface UiState {
 	|--------------------------------------------------
 	*/
 	setPreview: (preview: PreviewResponse | null) => void;
+
+	/**
+	|--------------------------------------------------
+	| Persist the chosen file paths for a preview
+	|--------------------------------------------------
+	*/
+	setSelection: (previewId: string, paths: string[]) => void;
 
 	/**
 	|--------------------------------------------------
@@ -233,6 +250,7 @@ export const useUiStore = create<UiState>((set) => ({
 	styleProfile: 'team-default',
 	formatting: DEFAULT_FORMATTING,
 	preview: null,
+	selection: null,
 	uploadSource: null,
 	toasts: [],
 	recentRuns: [],
@@ -242,7 +260,14 @@ export const useUiStore = create<UiState>((set) => ({
 	| Store the pending intake preview
 	|--------------------------------------------------
 	*/
-	setPreview: (preview) => set({ preview }),
+	setPreview: (preview) => set(preview ? { preview } : { preview: null, selection: null }),
+
+	/**
+	|--------------------------------------------------
+	| Persist the chosen file paths for a preview
+	|--------------------------------------------------
+	*/
+	setSelection: (previewId, paths) => set({ selection: { previewId, paths } }),
 
 	/**
 	|--------------------------------------------------

@@ -20,6 +20,7 @@ export function SelectConfigure() {
 	const router = useRouter();
 	const preview = useUiStore((state) => state.preview);
 	const setPreview = useUiStore((state) => state.setPreview);
+	const setSelection = useUiStore((state) => state.setSelection);
 	const provider = useUiStore((state) => state.provider);
 	const formatting = useUiStore((state) => state.formatting);
 	const styleProfile = useUiStore((state) => state.styleProfile);
@@ -29,7 +30,15 @@ export function SelectConfigure() {
 		() => preview?.modules.flatMap((module) => module.files.map((file) => file.path)) ?? [],
 		[preview],
 	);
-	const [selected, setSelected] = useState(() => new Set(allPaths));
+	const [selected, setSelected] = useState<Set<string>>(() => {
+		/**
+		|--------------------------------------------------
+		| Restore a saved selection for this preview, else all
+		|--------------------------------------------------
+		*/
+		const saved = useUiStore.getState().selection;
+		return saved && saved.previewId === preview?.previewId ? new Set(saved.paths) : new Set(allPaths);
+	});
 	const [expanded, setExpanded] = useState(() => new Set(preview?.modules.map((module) => module.id)));
 	const [search, setSearch] = useState('');
 	const [language, setLanguage] = useState('all');
@@ -41,10 +50,25 @@ export function SelectConfigure() {
 	const [expired, setExpired] = useState(false);
 
 	useEffect(() => {
-		setSelected(new Set(allPaths));
+		/**
+		|--------------------------------------------------
+		| Reinitialize from a saved selection when the preview changes
+		|--------------------------------------------------
+		*/
+		const saved = useUiStore.getState().selection;
+		setSelected(saved && saved.previewId === preview?.previewId ? new Set(saved.paths) : new Set(allPaths));
 		setExpanded(new Set(preview?.modules.map((module) => module.id)));
 		setActivePath(allPaths[0] ?? null);
 	}, [preview?.previewId, allPaths]);
+
+	/**
+	|--------------------------------------------------
+	| Persist the selection so it survives navigation
+	|--------------------------------------------------
+	*/
+	useEffect(() => {
+		if (preview) setSelection(preview.previewId, [...selected]);
+	}, [selected, preview?.previewId, setSelection]);
 
 	useEffect(() => {
 		if (!preview) return;

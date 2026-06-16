@@ -7,9 +7,10 @@
 */
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { useUiStore } from '@/store/ui-store';
-import { createPullRequest } from '@/lib/api';
+import { rerunRun, createPullRequest } from '@/lib/api';
 import { loadRunSource } from '@/lib/source-store';
 import { createZip, type ZipEntry } from '@/lib/browser-zip';
 
@@ -108,11 +109,39 @@ export function ReviewView({ run }: { run: RunState }) {
 	| Persisted original tree and download state
 	|--------------------------------------------------
 	*/
+	const router = useRouter();
 	const pushToast = useUiStore((state) => state.pushToast);
+	const provider = useUiStore((state) => state.provider);
+	const formatting = useUiStore((state) => state.formatting);
 	const [sourceEntries, setSourceEntries] = useState<ZipEntry[] | null>(null);
 	const [loadingSource, setLoadingSource] = useState(true);
 	const changedFiles = changedResults(run);
 	const formattedByPath = new Map(changedFiles.map((result) => [normalizePath(result.path), result]));
+
+	/**
+	|--------------------------------------------------
+	| Files the formatter left unchanged, eligible to retry
+	|--------------------------------------------------
+	*/
+	const retryableFiles = run.results.filter((result) => !result.changed && Boolean(result.originalSource));
+	const rerun = useMutation({
+		mutationFn: () =>
+			rerunRun(
+				provider,
+				formatting,
+				retryableFiles.map((result) => ({
+					path: result.path,
+					moduleId: result.moduleId,
+					source: result.originalSource,
+				})),
+				run.repository,
+			),
+		onSuccess: (next) => {
+			pushToast(`Rerunning ${retryableFiles.length} file${retryableFiles.length === 1 ? '' : 's'}`, 'success');
+			router.push(`/runs/${next.id}`);
+		},
+		onError: (error: Error) => pushToast(error.message, 'error'),
+	});
 
 	/**
 	|--------------------------------------------------
@@ -286,6 +315,23 @@ export function ReviewView({ run }: { run: RunState }) {
 					<Button onClick={downloadChanged} disabled={changedFiles.length === 0}>
 						<Icon name="download" /> Changed files (.zip)
 					</Button>
+
+					{/**
+					|--------------------------------------------------
+					| Rerun the formatter on files left unchanged
+					|--------------------------------------------------
+					*/}
+					{retryableFiles.length > 0 && (
+						<Button
+							variant="secondary"
+							onClick={() => rerun.mutate()}
+							disabled={rerun.isPending}
+							title="Run the formatter again on the files it left unchanged."
+						>
+							<Icon name="refresh" className={rerun.isPending ? 'animate-cx-spin' : ''} />
+							{rerun.isPending ? 'Starting rerun…' : `Rerun unchanged (${retryableFiles.length})`}
+						</Button>
+					)}
 
 					{/**
 					|--------------------------------------------------
